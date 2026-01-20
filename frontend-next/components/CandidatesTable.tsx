@@ -112,7 +112,7 @@ export default function CandidatesTable({
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          downloadResume(candidate.id, candidate.resume_filename!)
+                          downloadResume(candidate.id!, candidate.resume_filename!)
                         }}
                         className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-slate-300 text-sm transition-all"
                         title="Download Resume"
@@ -132,7 +132,7 @@ export default function CandidatesTable({
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          onViewEmail(candidate.id)
+                          onViewEmail(candidate.id!)
                         }}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 rounded-lg text-blue-300 text-sm transition-all"
                         title="View Full Email"
@@ -147,7 +147,7 @@ export default function CandidatesTable({
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          onViewEmailInfo(candidate.id)
+                          onViewEmailInfo(candidate.id!)
                         }}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 rounded-lg text-amber-300 text-sm transition-all"
                         title="View Email Info"
@@ -162,7 +162,7 @@ export default function CandidatesTable({
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          onViewCVInfo(candidate.id)
+                          onViewCVInfo(candidate.id!)
                         }}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-lg text-purple-300 text-sm transition-all"
                         title="View Document Details"
