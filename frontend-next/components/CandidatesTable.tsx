@@ -105,7 +105,7 @@ export default function CandidatesTable({
                     <span className="text-slate-300 line-clamp-2">{candidate.email_subject}</span>
                   </td>
                   <td className="px-6 py-4 text-slate-300 whitespace-nowrap">
-                    {formatDate(candidate.email_date || candidate.created_at)}
+                    {formatDate(candidate.email_date || candidate.created_at || null)}
                   </td>
                   <td className="px-6 py-4">
                     {candidate.resume_filename ? (
