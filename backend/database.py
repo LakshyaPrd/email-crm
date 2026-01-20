@@ -76,8 +76,12 @@ class EmailConfig(Base):
     last_scan = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-# Create engine
-engine = create_engine(settings.DATABASE_URL, connect_args={"check_same_thread": False})
+# Create engine with appropriate connect_args based on database type
+if settings.DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(settings.DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    # PostgreSQL doesn't need check_same_thread
+    engine = create_engine(settings.DATABASE_URL)
 
 # Create session
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
