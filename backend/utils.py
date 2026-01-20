@@ -3,7 +3,7 @@ import base64
 from datetime import datetime
 from typing import Optional
 from sqlalchemy.orm import Session
-from backend.database import Candidate
+from database import Candidate
 
 def generate_unique_id(email_subject: str, email_date: datetime, sender_email: str) -> str:
     """

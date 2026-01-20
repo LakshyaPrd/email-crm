@@ -11,12 +11,12 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from backend.database import get_db, init_db, Candidate, EmailConfig, User
-from backend.gmail_service import GmailService
-from backend.imap_service import IMAPService
-from backend.extractor import DataExtractor
-from backend.config import settings
-from backend.utils import generate_unique_id, check_duplicate_candidate
+from database import get_db, init_db, Candidate, EmailConfig, User
+from gmail_service import GmailService
+from imap_service import IMAPService
+from extractor import DataExtractor
+from config import settings
+from utils import generate_unique_id, check_duplicate_candidate
 
 app = FastAPI(title="Email-to-Candidate Automation")
 
