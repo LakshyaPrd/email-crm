@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: crm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-indeed_crm}
+      POSTGRES_USER: ${POSTGRES_USER:-crmuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - crm-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crmuser}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend (FastAPI)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: crm-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-crmuser}:${POSTGRES_PASSWORD:-changeme123}@postgres:5432/${POSTGRES_DB:-indeed_crm}
+      UPLOAD_DIR: /app/uploads
+      GMAIL_CREDENTIALS_FILE: /app/credentials.json
+      GMAIL_TOKEN_FILE: /app/token.json
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+      - ./credentials.json:/app/credentials.json
+      - ./token.json:/app/token.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - crm-internal
+      - traefik-public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.crm-backend.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.crm-backend.entrypoints=websecure"
+      - "traefik.http.routers.crm-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.crm-backend.loadbalancer.server.port=8000"
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000
+
+  # Frontend (Next.js)
+  frontend:
+    build:
+      context: ./frontend-next
+      dockerfile: Dockerfile.prod
+    container_name: crm-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: https://${DOMAIN}/api
+    depends_on:
+      - backend
+    networks:
+      - traefik-public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.crm-frontend.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.crm-frontend.entrypoints=websecure"
+      - "traefik.http.routers.crm-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.crm-frontend.loadbalancer.server.port=3000"
+
+networks:
+  crm-internal:
+    driver: bridge
+  traefik-public:
+    external: true
+
+volumes:
+  postgres_data:
