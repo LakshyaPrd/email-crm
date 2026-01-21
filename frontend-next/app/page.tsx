@@ -302,22 +302,52 @@ export default function Home() {
     const handleLogin = async () => {
         setIsLoading(true)
         try {
-            const response = await fetch(`${API_URL}/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            })
+            // Call backend to get OAuth URL
+            const response = await fetch(`${API_URL}/auth/google/login`)
             const data = await response.json()
-            if (data.success) {
-                setUser(data.user)
-                setIsLoggedIn(true)
-                localStorage.setItem('recruiter_user', JSON.stringify(data.user))
-                fetchCandidates()
+            
+            if (data.success && data.auth_url) {
+                // Open OAuth in popup window
+                const width = 500
+                const height = 600
+                const left = window.screen.width / 2 - width / 2
+                const top = window.screen.height / 2 - height / 2
+                
+                const popup = window.open(
+                    data.auth_url,
+                    'Gmail OAuth',
+                    `width=${width},height=${height},left=${left},top=${top}`
+                )
+                
+                // Listen for OAuth callback
+                window.addEventListener('message', (event) => {
+                    if (event.origin !== window.location.origin) return
+                    
+                    if (event.data.type === 'OAUTH_SUCCESS') {
+                        // Store session
+                        localStorage.setItem('crm_session', JSON.stringify(event.data.data))
+                        setUser(event.data.data.user)
+                        setIsLoggedIn(true)
+                        fetchCandidates()
+                        setIsLoading(false)
+                    } else if (event.data.type === 'OAUTH_ERROR') {
+                        alert(`Login failed: ${event.data.error}`)
+                        setIsLoading(false)
+                    }
+                }, { once: true })
+                
+                // Check if popup was blocked
+                if (!popup || popup.closed) {
+                    alert('Popup blocked! Please allow popups for this site.')
+                    setIsLoading(false)
+                }
             } else {
-                alert(data.detail || 'Login failed')
+                alert(data.detail || 'Failed to initiate OAuth')
+                setIsLoading(false)
             }
         } catch (error) {
+            console.error('Login error:', error)
             alert('Failed to login. Make sure the backend is running.')
-        } finally {
             setIsLoading(false)
         }
     }
