@@ -56,6 +56,31 @@ type ScanProgress = {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
 
+// Helper to get session token
+const getSessionToken = () => {
+    try {
+        const sessionData = localStorage.getItem('crm_session')
+        if (sessionData) {
+            const parsed = JSON.parse(sessionData)
+            return parsed.token
+        }
+    } catch (e) {
+        console.error('Failed to get session token:', e)
+    }
+    return null
+}
+
+// Helper to build authenticated API URL
+const buildAuthUrl = (endpoint: string) => {
+    const token = getSessionToken()
+    if (!token) {
+        throw new Error('Not authenticated')
+    }
+    const url = new URL(`${API_URL}${endpoint}`)
+    url.searchParams.set('session', token)
+    return url.toString()
+}
+
 export default function Home() {
     const [candidates, setCandidates] = useState<Candidate[]>([])
     const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -273,10 +298,17 @@ export default function Home() {
 
     const fetchCandidates = async (search?: string) => {
         try {
-            let url = `${API_URL}/candidates?`
-            if (search) url += `search=${encodeURIComponent(search)}`
+            let endpoint = '/candidates'
+            if (search) endpoint += `?search=${encodeURIComponent(search)}`
+            const url = buildAuthUrl(endpoint)
             const response = await fetch(url)
-            if (!response.ok) return
+            if (!response.ok) {
+                if (response.status === 401) {
+                    alert('Session expired. Please login again.')
+                    setIsLoggedIn(false)
+                }
+                return
+            }
             const data = await response.json()
             setCandidates(Array.isArray(data) ? data : [])
         } catch (error) {
@@ -321,7 +353,7 @@ export default function Home() {
                 
                 // Listen for OAuth callback
                 window.addEventListener('message', (event) => {
-                    if (event.origin !== window.location.origin) return
+                    if (!event.origin.includes('localhost')) return
                     
                     if (event.data.type === 'OAUTH_SUCCESS') {
                         // Store session
@@ -359,6 +391,7 @@ export default function Home() {
             console.error('Logout error:', error)
         }
         localStorage.removeItem('recruiter_user')
+        localStorage.removeItem('crm_session') // Clear session token
         setIsLoggedIn(false)
         setUser(null)
         setCandidates([])
@@ -449,12 +482,12 @@ export default function Home() {
         setScannedCandidates([]) // Clear previous scan results
         
         try {
-            const scanRes = await fetch(`${API_URL}/scan`, { 
+            const scanUrl = buildAuthUrl('/scan')
+            const scanRes = await fetch(scanUrl, { 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    search_query: query || null,
-                    recruiter_id: user?.id
+                    search_query: query || null
                 })
             })
             
@@ -464,7 +497,7 @@ export default function Home() {
             
             const pollProgress = async () => {
                 try {
-                    const progressRes = await fetch(`${API_URL}/scan-progress`)
+                    const progressRes = await fetch(buildAuthUrl('/scan-progress'))
                     if (progressRes.ok) {
                         const progress = await progressRes.json()
                         console.log('📊 Scan progress:', progress)
@@ -477,7 +510,7 @@ export default function Home() {
                             if (progress.candidates_added > 0) {
                                 try {
                                     console.log(`📥 Fetching candidates from ${API_URL}/candidates`)
-                                    const res = await fetch(`${API_URL}/candidates`)
+                                    const res = await fetch(buildAuthUrl('/candidates'))
                                     console.log(`📡 Response status: ${res.status}`)
                                     if (res.ok) {
                                         const data = await res.json()

@@ -41,6 +41,30 @@ scan_progress = {
 # Current recruiter ID for tracking who is scanning
 current_recruiter_id: Optional[int] = None
 
+# Dependency to get authenticated user from session
+async def get_current_user_from_session(
+    authorization: Optional[str] = Query(None, alias="session"),
+    db: Session = Depends(get_db)
+) -> User:
+    """
+    Dependency to extract and verify current user from session token
+    Raises HTTP 401 if not authenticated
+    """
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated. Please login.")
+    
+    # Verify session
+    payload = SessionManager.verify_session(authorization)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired session. Please login again.")
+    
+    # Get user from database
+    user = db.query(User).filter(User.id == payload['user_id']).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return user
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -179,24 +203,74 @@ async def configure_email(
 async def trigger_scan(
     background_tasks: BackgroundTasks, 
     request: ScanRequest = None,
+    current_user: User = Depends(get_current_user_from_session),
     db: Session = Depends(get_db)
 ):
-    """Manually trigger email scan - candidates are auto-saved to database"""
+    """Manually trigger email scan - requires authentication"""
     global current_batch_id, current_recruiter_id
     search_query = request.search_query if request else None
     hours_back = request.hours_back if request else None
-    recruiter_id = request.recruiter_id if request else None
+    
+    # Use authenticated user's ID
+    recruiter_id = current_user.id
+    
+    # Verify user has Gmail tokens
+    if not current_user.gmail_access_token or not current_user.gmail_refresh_token:
+        raise HTTPException(
+            status_code=400, 
+            detail="Gmail not connected. Please reconnect your Gmail account."
+        )
     
     # Generate new batch ID for this scan
     current_batch_id = str(uuid.uuid4())[:8]
     current_recruiter_id = recruiter_id
     
-    background_tasks.add_task(scan_emails_task, db, search_query, hours_back, current_batch_id, recruiter_id)
+    # Create GmailService with user's tokens
+    from oauth_handler import WebOAuthHandler
+    oauth_handler = WebOAuthHandler()
+    
+    try:
+        # Get credentials from stored tokens
+        creds = oauth_handler.get_credentials_from_tokens(
+            current_user.gmail_access_token,
+            current_user.gmail_refresh_token,
+            current_user.gmail_token_expiry
+        )
+        
+        # Create Gmail service with user's credentials
+        from googleapiclient.discovery import build
+        gmail_service = build('gmail', 'v1', credentials=creds)
+        
+        # Update tokens if refreshed
+        if creds.token != current_user.gmail_access_token:
+            current_user.gmail_access_token = creds.token
+            if creds.expiry:
+                current_user.gmail_token_expiry = creds.expiry
+            db.commit()
+        
+    except Exception as e:
+        print(f"❌ Error creating Gmail service: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to connect to Gmail: {str(e)}"
+        )
+    
+    background_tasks.add_task(
+        scan_emails_task_with_service, 
+        db, 
+        gmail_service,
+        search_query, 
+        hours_back, 
+        current_batch_id, 
+        recruiter_id
+    )
+    
     return {
         "success": True, 
         "message": "Email scan started - candidates will be auto-saved to database", 
         "search_query": search_query,
-        "batch_id": current_batch_id
+        "batch_id": current_batch_id,
+        "user_email": current_user.email
     }
 
 @app.get("/api/scan-progress")
@@ -238,7 +312,6 @@ async def delete_selected_candidates(
 async def get_candidates(
     search: Optional[str] = Query(None, description="Search in name, email, subject, or unique_id"),
     batch_id: Optional[str] = Query(None, description="Filter by batch/scan ID"),
-    recruiter_id: Optional[int] = Query(None, description="Filter by recruiter ID"),
     # CV Filters
     cv_freshness: Optional[str] = Query(None),
     experience_years: Optional[str] = Query(None),
@@ -274,18 +347,19 @@ async def get_candidates(
     has_mobile_confirmed: Optional[bool] = Query(None),
     has_photo: Optional[bool] = Query(None),
     has_experience: Optional[bool] = Query(None),
+    # Authentication
+    current_user: User = Depends(get_current_user_from_session),
     db: Session = Depends(get_db)
 ):
-    """Get candidates with comprehensive filtering - supports ALL advanced filters"""
+    """Get candidates - automatically filtered by authenticated user"""
     query = db.query(Candidate)
+    
+    # CRITICAL: Always filter by current user
+    query = query.filter(Candidate.recruiter_id == current_user.id)
     
     # Filter by batch_id if provided
     if batch_id:
         query = query.filter(Candidate.batch_id == batch_id)
-    
-    # Filter by recruiter_id if provided (optional - omit to search all recruiters)
-    if recruiter_id:
-        query = query.filter(Candidate.recruiter_id == recruiter_id)
     
     if search:
         search_term = f"%{search}%"
@@ -784,21 +858,31 @@ async def google_oauth_callback(
                     }}
                 }};
                 
+                console.log('OAuth callback loaded', sessionData);
+                console.log('window.opener exists:', !!window.opener);
+                
                 // Try to send to parent window (popup scenario)
-                if (window.opener) {{
+                if (window.opener && !window.opener.closed) {{
+                    console.log('Sending message to opener...');
                     window.opener.postMessage({{
                         type: 'OAUTH_SUCCESS',
                         data: sessionData
-                    }}, window.location.origin);
-                    window.close();
+                    }}, '*');  // Use '*' for localhost development
+                    console.log('Message sent, closing window...');
+                    setTimeout(() => {{
+                        window.close();
+                        console.log('Close attempted');
+                    }}, 1000);
                 }} else {{
+                    console.log('No opener, using redirect fallback');
                     // Redirect scenario
                     localStorage.setItem('crm_session', JSON.stringify(sessionData));
-                    window.location.href = '/';
+                    window.location.href = 'http://localhost:3000/';
                 }}
             </script>
             <h2>✅ Login Successful!</h2>
             <p>Redirecting...</p>
+            <p><small>If window doesn't close, <a href="javascript:window.close()">click here</a></small></p>
         </body>
         </html>
         """)
@@ -971,6 +1055,26 @@ async def get_latest_candidates(
 
 
 # Background task
+def scan_emails_task_with_service(db: Session, gmail_service, search_query: str = None, hours_back: int = None, batch_id: str = None, recruiter_id: int = None):
+    """
+    Scan emails using provided Gmail service (for multi-user OAuth)
+    This version receives an already-authenticated Gmail service
+    """
+    global current_email_service, scan_progress
+    
+    # Use the provided Gmail service directly
+    temp_gmail_service = type('obj', (object,), {
+        'service': gmail_service,
+        'search_messages': lambda query='', max_results=100: GmailService().search_messages.__func__(
+            type('obj', (object,), {'service': gmail_service})(), query, max_results
+        )
+    })()
+    
+    current_email_service = temp_gmail_service
+    
+    # Call the original scan function logic
+    scan_emails_task(db, search_query, hours_back, batch_id, recruiter_id)
+
 def scan_emails_task(db: Session, search_query: str = None, hours_back: int = None, batch_id: str = None, recruiter_id: int = None):
     """Scan emails and save ALL candidates directly to database (auto-sync)"""
     global scan_progress, current_recruiter_id, current_email_service
