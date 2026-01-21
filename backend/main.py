@@ -1036,6 +1036,9 @@ def scan_emails_task(db: Session, search_query: str = None, hours_back: int = No
     global scan_progress, current_recruiter_id, current_email_service
     
     try:
+        # Import here to avoid circular dependency
+        from googleapiclient.discovery import build
+        
         # Create user-specific Gmail service
         if user and user.gmail_access_token and user.gmail_refresh_token:
             print(f"📧 Creating Gmail service for {user.email}")

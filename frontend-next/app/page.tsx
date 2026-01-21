@@ -330,8 +330,8 @@ export default function Home() {
             
             if (data.success && data.auth_url) {
                 // Open OAuth in popup window
-                const width = 500
-                const height = 600
+                const width = 600
+                const height = 700
                 const left = window.screen.width / 2 - width / 2
                 const top = window.screen.height / 2 - height / 2
                 
@@ -341,9 +341,27 @@ export default function Home() {
                     `width=${width},height=${height},left=${left},top=${top}`
                 )
                 
+                // Check if popup was blocked (basic check)
+                if (!popup) {
+                    alert('Popup blocked! Please allow popups for this site.')
+                    setIsLoading(false)
+                    return
+                }
+                
+                // Set timeout in case popup doesn't respond
+                const timeout = setTimeout(() => {
+                    setIsLoading(false)
+                    console.log('OAuth timeout - popup did not respond')
+                }, 60000) // 60 second timeout
+                
                 // Listen for OAuth callback
-                window.addEventListener('message', (event) => {
+                const messageHandler = (event: MessageEvent) => {
+                    console.log('Received message:', event.data)
+                    
                     if (!event.origin.includes('localhost')) return
+                    
+                    clearTimeout(timeout)
+                    window.removeEventListener('message', messageHandler)
                     
                     if (event.data.type === 'OAUTH_SUCCESS') {
                         // Store session
@@ -352,17 +370,14 @@ export default function Home() {
                         setIsLoggedIn(true)
                         fetchCandidates()
                         setIsLoading(false)
+                        console.log('✅ Login successful')
                     } else if (event.data.type === 'OAUTH_ERROR') {
                         alert(`Login failed: ${event.data.error}`)
                         setIsLoading(false)
                     }
-                }, { once: true })
-                
-                // Check if popup was blocked
-                if (!popup || popup.closed) {
-                    alert('Popup blocked! Please allow popups for this site.')
-                    setIsLoading(false)
                 }
+                
+                window.addEventListener('message', messageHandler)
             } else {
                 alert(data.detail || 'Failed to initiate OAuth')
                 setIsLoading(false)
