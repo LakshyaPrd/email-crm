@@ -672,7 +672,7 @@ async def login(request: LoginRequest = LoginRequest(), db: Session = Depends(ge
 
 @app.post("/api/auth/logout")
 async def logout():
-    """Logout (clear session)"""
+    """Logout (clear session and force account selection on next login)"""
     global current_email_service
     
     # Disconnect from email service
@@ -681,7 +681,15 @@ async def logout():
             current_email_service.disconnect()
         current_email_service = None
     
-    return {"success": True, "message": "Logged out successfully"}
+    # Delete token.json to force account selection on next login
+    if os.path.exists(settings.GMAIL_TOKEN_FILE):
+        try:
+            os.remove(settings.GMAIL_TOKEN_FILE)
+            print("✅ Deleted token.json - next login will prompt for account selection")
+        except Exception as e:
+            print(f"⚠️ Could not delete token.json: {e}")
+    
+    return {"success": True, "message": "Logged out successfully. Next login will prompt for account selection."}
 
 @app.post("/api/auth/disconnect")
 async def disconnect_email():
