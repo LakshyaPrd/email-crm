@@ -1058,21 +1058,43 @@ async def get_latest_candidates(
 def scan_emails_task_with_service(db: Session, gmail_service, search_query: str = None, hours_back: int = None, batch_id: str = None, recruiter_id: int = None):
     """
     Scan emails using provided Gmail service (for multi-user OAuth)
-    This version receives an already-authenticated Gmail service
     """
     global current_email_service, scan_progress
     
-    # Use the provided Gmail service directly
-    temp_gmail_service = type('obj', (object,), {
-        'service': gmail_service,
-        'search_messages': lambda query='', max_results=100: GmailService().search_messages.__func__(
-            type('obj', (object,), {'service': gmail_service})(), query, max_results
-        )
-    })()
+    # Create a minimal service wrapper that matches GmailService interface
+    class GmailServiceWrapper:
+        def __init__(self, service):
+            self.service = service
+            
+        def get_emails(self, query='', max_results=100):
+            """Fetch emails matching query"""
+            try:
+                results = self.service.users().messages().list(
+                    userId='me',
+                    q=query,
+                    maxResults=max_results
+                ).execute()
+                
+                messages = results.get('messages', [])
+                emails = []
+                
+                for msg in messages:
+                    msg_data = self.service.users().messages().get(
+                        userId='me', 
+                        id=msg['id'],
+                        format='full'
+                    ).execute()
+                    emails.append(msg_data)
+                
+                return emails
+            except Exception as e:
+                print(f"❌ Error fetching emails: {e}")
+                return []
     
-    current_email_service = temp_gmail_service
+    # Set the wrapped service as current
+    current_email_service = GmailServiceWrapper(gmail_service)
     
-    # Call the original scan function logic
+    # Call the original scan function
     scan_emails_task(db, search_query, hours_back, batch_id, recruiter_id)
 
 def scan_emails_task(db: Session, search_query: str = None, hours_back: int = None, batch_id: str = None, recruiter_id: int = None):
