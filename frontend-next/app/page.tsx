@@ -56,31 +56,6 @@ type ScanProgress = {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
 
-// Helper to get session token
-const getSessionToken = () => {
-    try {
-        const sessionData = localStorage.getItem('crm_session')
-        if (sessionData) {
-            const parsed = JSON.parse(sessionData)
-            return parsed.token
-        }
-    } catch (e) {
-        console.error('Failed to get session token:', e)
-    }
-    return null
-}
-
-// Helper to build authenticated API URL
-const buildAuthUrl = (endpoint: string) => {
-    const token = getSessionToken()
-    if (!token) {
-        throw new Error('Not authenticated')
-    }
-    const url = new URL(`${API_URL}${endpoint}`)
-    url.searchParams.set('session', token)
-    return url.toString()
-}
-
 export default function Home() {
     const [candidates, setCandidates] = useState<Candidate[]>([])
     const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -296,19 +271,37 @@ export default function Home() {
         return parts.join(' ')
     }
 
+    // Helper to get session token
+    const getSessionToken = () => {
+        const session = localStorage.getItem('crm_session')
+        if (session) {
+            try {
+                const data = JSON.parse(session)
+                return data.token
+            } catch {
+                return null
+            }
+        }
+        return null
+    }
+
     const fetchCandidates = async (search?: string) => {
         try {
-            let endpoint = '/candidates'
-            if (search) endpoint += `?search=${encodeURIComponent(search)}`
-            const url = buildAuthUrl(endpoint)
-            const response = await fetch(url)
-            if (!response.ok) {
-                if (response.status === 401) {
-                    alert('Session expired. Please login again.')
-                    setIsLoggedIn(false)
-                }
+            const token = getSessionToken()
+            if (!token) {
+                console.error('No session token found')
                 return
             }
+
+            let url = `${API_URL}/candidates?`
+            if (search) url += `search=${encodeURIComponent(search)}`
+            
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+            if (!response.ok) return
             const data = await response.json()
             setCandidates(Array.isArray(data) ? data : [])
         } catch (error) {
@@ -391,7 +384,6 @@ export default function Home() {
             console.error('Logout error:', error)
         }
         localStorage.removeItem('recruiter_user')
-        localStorage.removeItem('crm_session') // Clear session token
         setIsLoggedIn(false)
         setUser(null)
         setCandidates([])
@@ -482,12 +474,22 @@ export default function Home() {
         setScannedCandidates([]) // Clear previous scan results
         
         try {
-            const scanUrl = buildAuthUrl('/scan')
-            const scanRes = await fetch(scanUrl, { 
+            const token = getSessionToken()
+            if (!token) {
+                alert('Session expired. Please login again.')
+                setIsLoading(false)
+                return
+            }
+
+            const scanRes = await fetch(`${API_URL}/scan`, { 
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({ 
-                    search_query: query || null
+                    search_query: query || null,
+                    recruiter_id: user?.id
                 })
             })
             
@@ -497,7 +499,7 @@ export default function Home() {
             
             const pollProgress = async () => {
                 try {
-                    const progressRes = await fetch(buildAuthUrl('/scan-progress'))
+                    const progressRes = await fetch(`${API_URL}/scan-progress`)
                     if (progressRes.ok) {
                         const progress = await progressRes.json()
                         console.log('📊 Scan progress:', progress)
@@ -510,7 +512,7 @@ export default function Home() {
                             if (progress.candidates_added > 0) {
                                 try {
                                     console.log(`📥 Fetching candidates from ${API_URL}/candidates`)
-                                    const res = await fetch(buildAuthUrl('/candidates'))
+                                    const res = await fetch(`${API_URL}/candidates`)
                                     console.log(`📡 Response status: ${res.status}`)
                                     if (res.ok) {
                                         const data = await res.json()

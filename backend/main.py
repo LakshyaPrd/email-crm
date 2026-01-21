@@ -41,30 +41,6 @@ scan_progress = {
 # Current recruiter ID for tracking who is scanning
 current_recruiter_id: Optional[int] = None
 
-# Dependency to get authenticated user from session
-async def get_current_user_from_session(
-    authorization: Optional[str] = Query(None, alias="session"),
-    db: Session = Depends(get_db)
-) -> User:
-    """
-    Dependency to extract and verify current user from session token
-    Raises HTTP 401 if not authenticated
-    """
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Not authenticated. Please login.")
-    
-    # Verify session
-    payload = SessionManager.verify_session(authorization)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired session. Please login again.")
-    
-    # Get user from database
-    user = db.query(User).filter(User.id == payload['user_id']).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    return user
-
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -73,6 +49,35 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Authentication Dependency
+async def get_current_user(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+) -> User:
+    """Extract and verify user from Authorization header"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No authorization token provided")
+    
+    # Extract token from "Bearer <token>"
+    try:
+        scheme, token = authorization.split()
+        if scheme.lower() != 'bearer':
+            raise HTTPException(status_code=401, detail="Invalid authentication scheme")
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid authorization header format")
+    
+    # Verify JWT
+    payload = SessionManager.verify_session(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    # Get user from database
+    user = db.query(User).filter(User.id == payload['user_id']).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return user
 
 # Initialize database
 init_db()
@@ -203,74 +208,45 @@ async def configure_email(
 async def trigger_scan(
     background_tasks: BackgroundTasks, 
     request: ScanRequest = None,
-    current_user: User = Depends(get_current_user_from_session),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Manually trigger email scan - requires authentication"""
+    """Manually trigger email scan - uses current user's Gmail tokens"""
     global current_batch_id, current_recruiter_id
-    search_query = request.search_query if request else None
-    hours_back = request.hours_back if request else None
     
-    # Use authenticated user's ID
-    recruiter_id = current_user.id
+    print(f"📧 Scan initiated by user: {current_user.email}")
     
-    # Verify user has Gmail tokens
+    # Verify user has Gmail connected
     if not current_user.gmail_access_token or not current_user.gmail_refresh_token:
         raise HTTPException(
-            status_code=400, 
-            detail="Gmail not connected. Please reconnect your Gmail account."
+            status_code=400,
+            detail="Gmail not connected. Please logout and login with Gmail."
         )
+    
+    search_query = request.search_query if request else None
+    hours_back = request.hours_back if request else None
+    recruiter_id = current_user.id  # Use current user's ID
     
     # Generate new batch ID for this scan
     current_batch_id = str(uuid.uuid4())[:8]
     current_recruiter_id = recruiter_id
     
-    # Create GmailService with user's tokens
-    from oauth_handler import WebOAuthHandler
-    oauth_handler = WebOAuthHandler()
-    
-    try:
-        # Get credentials from stored tokens
-        creds = oauth_handler.get_credentials_from_tokens(
-            current_user.gmail_access_token,
-            current_user.gmail_refresh_token,
-            current_user.gmail_token_expiry
-        )
-        
-        # Create Gmail service with user's credentials
-        from googleapiclient.discovery import build
-        gmail_service = build('gmail', 'v1', credentials=creds)
-        
-        # Update tokens if refreshed
-        if creds.token != current_user.gmail_access_token:
-            current_user.gmail_access_token = creds.token
-            if creds.expiry:
-                current_user.gmail_token_expiry = creds.expiry
-            db.commit()
-        
-    except Exception as e:
-        print(f"❌ Error creating Gmail service: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to connect to Gmail: {str(e)}"
-        )
-    
+    # Pass user object to background task
     background_tasks.add_task(
-        scan_emails_task_with_service, 
+        scan_emails_task, 
         db, 
-        gmail_service,
         search_query, 
         hours_back, 
         current_batch_id, 
-        recruiter_id
+        recruiter_id,
+        current_user  # Pass user object
     )
     
     return {
         "success": True, 
-        "message": "Email scan started - candidates will be auto-saved to database", 
+        "message": f"Email scan started for {current_user.email}", 
         "search_query": search_query,
-        "batch_id": current_batch_id,
-        "user_email": current_user.email
+        "batch_id": current_batch_id
     }
 
 @app.get("/api/scan-progress")
@@ -312,6 +288,7 @@ async def delete_selected_candidates(
 async def get_candidates(
     search: Optional[str] = Query(None, description="Search in name, email, subject, or unique_id"),
     batch_id: Optional[str] = Query(None, description="Filter by batch/scan ID"),
+    recruiter_id: Optional[int] = Query(None, description="Filter by recruiter ID"),
     # CV Filters
     cv_freshness: Optional[str] = Query(None),
     experience_years: Optional[str] = Query(None),
@@ -347,19 +324,18 @@ async def get_candidates(
     has_mobile_confirmed: Optional[bool] = Query(None),
     has_photo: Optional[bool] = Query(None),
     has_experience: Optional[bool] = Query(None),
-    # Authentication
-    current_user: User = Depends(get_current_user_from_session),
     db: Session = Depends(get_db)
 ):
-    """Get candidates - automatically filtered by authenticated user"""
+    """Get candidates with comprehensive filtering - supports ALL advanced filters"""
     query = db.query(Candidate)
-    
-    # CRITICAL: Always filter by current user
-    query = query.filter(Candidate.recruiter_id == current_user.id)
     
     # Filter by batch_id if provided
     if batch_id:
         query = query.filter(Candidate.batch_id == batch_id)
+    
+    # Filter by recruiter_id if provided (optional - omit to search all recruiters)
+    if recruiter_id:
+        query = query.filter(Candidate.recruiter_id == recruiter_id)
     
     if search:
         search_term = f"%{search}%"
@@ -1055,55 +1031,48 @@ async def get_latest_candidates(
 
 
 # Background task
-def scan_emails_task_with_service(db: Session, gmail_service, search_query: str = None, hours_back: int = None, batch_id: str = None, recruiter_id: int = None):
-    """
-    Scan emails using provided Gmail service (for multi-user OAuth)
-    """
-    global current_email_service, scan_progress
-    
-    # Create a minimal service wrapper that matches GmailService interface
-    class GmailServiceWrapper:
-        def __init__(self, service):
-            self.service = service
-            
-        def get_emails(self, query='', max_results=100):
-            """Fetch emails matching query"""
-            try:
-                results = self.service.users().messages().list(
-                    userId='me',
-                    q=query,
-                    maxResults=max_results
-                ).execute()
-                
-                messages = results.get('messages', [])
-                emails = []
-                
-                for msg in messages:
-                    msg_data = self.service.users().messages().get(
-                        userId='me', 
-                        id=msg['id'],
-                        format='full'
-                    ).execute()
-                    emails.append(msg_data)
-                
-                return emails
-            except Exception as e:
-                print(f"❌ Error fetching emails: {e}")
-                return []
-    
-    # Set the wrapped service as current
-    current_email_service = GmailServiceWrapper(gmail_service)
-    
-    # Call the original scan function
-    scan_emails_task(db, search_query, hours_back, batch_id, recruiter_id)
-
-def scan_emails_task(db: Session, search_query: str = None, hours_back: int = None, batch_id: str = None, recruiter_id: int = None):
-    """Scan emails and save ALL candidates directly to database (auto-sync)"""
+def scan_emails_task(db: Session, search_query: str = None, hours_back: int = None, batch_id: str = None, recruiter_id: int = None, user: User = None):
+    """Scan emails using current user's Gmail tokens and save to database"""
     global scan_progress, current_recruiter_id, current_email_service
     
     try:
-        # Use current email service (Gmail or IMAP)
-        email_service = current_email_service or gmail_service
+        # Create user-specific Gmail service
+        if user and user.gmail_access_token and user.gmail_refresh_token:
+            print(f"📧 Creating Gmail service for {user.email}")
+            oauth_handler = WebOAuthHandler()
+            
+            try:
+                # Get user's credentials
+                creds = oauth_handler.get_credentials_from_tokens(
+                    access_token=user.gmail_access_token,
+                    refresh_token=user.gmail_refresh_token,
+                    token_expiry=user.gmail_token_expiry
+                )
+                
+                # Check if token was refreshed
+                if creds.token != user.gmail_access_token:
+                    user.gmail_access_token = creds.token
+                    user.gmail_token_expiry = creds.expiry
+                    db.commit()
+                    print(f"✅ Refreshed token for {user.email}")
+                
+                # Create Gmail service with user's credentials
+                from googleapiclient.discovery import build
+                email_service = build('gmail', 'v1', credentials=creds)
+                current_email_service = email_service
+                print(f"✅ Gmail service created for {user.email}")
+                
+            except Exception as e:
+                print(f"❌ Failed to create Gmail service: {e}")
+                scan_progress = {
+                    "batch_id": batch_id,
+                    "status": "error",
+                    "message": f"Gmail authentication failed: {str(e)}"
+                }
+                return
+        else:
+            # Fallback to global email service (legacy)
+            email_service = current_email_service or gmail_service
         
         # Store recruiter_id for tracking
         current_recruiter_id = recruiter_id
@@ -1112,11 +1081,11 @@ def scan_emails_task(db: Session, search_query: str = None, hours_back: int = No
             "status": "fetching",
             "total_emails": 0,
             "processed_emails": 0,
-            "current_subject": "Connecting to Gmail...",
+            "current_subject": f"Connecting to {user.email if user else 'Gmail'}...",
             "candidates_added": 0,
             "skipped": 0,
             "errors": 0,
-            "message": "Fetching emails from Gmail..."
+            "message": f"Fetching emails from {user.email if user else 'Gmail'}..."
         }
         
         print(f"📧 Scanning for emails... (Batch: {batch_id})")
