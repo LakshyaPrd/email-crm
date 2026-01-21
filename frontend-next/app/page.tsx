@@ -288,19 +288,16 @@ export default function Home() {
     const fetchCandidates = async (search?: string) => {
         try {
             const token = getSessionToken()
-            if (!token) {
-                console.error('No session token found')
-                return
-            }
-
+            
             let url = `${API_URL}/candidates?`
             if (search) url += `search=${encodeURIComponent(search)}`
             
-            const response = await fetch(url, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            })
+            const headers: HeadersInit = {}
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`
+            }
+            
+            const response = await fetch(url, { headers })
             if (!response.ok) return
             const data = await response.json()
             setCandidates(Array.isArray(data) ? data : [])
