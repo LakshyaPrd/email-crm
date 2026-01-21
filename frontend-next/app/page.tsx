@@ -356,9 +356,16 @@ export default function Home() {
                 
                 // Listen for OAuth callback
                 const messageHandler = (event: MessageEvent) => {
-                    console.log('Received message:', event.data)
+                    console.log('Received message:', event.data, 'Origin:', event.origin)
                     
-                    if (!event.origin.includes('localhost')) return
+                    // Allow localhost, the VPS IP, and nip.io domain
+                    const allowedOrigins = ['localhost', '76.13.17.251', 'nip.io']
+                    const isAllowed = allowedOrigins.some(origin => event.origin.includes(origin))
+                    
+                    if (!isAllowed) {
+                        console.log('Origin not allowed:', event.origin)
+                        return
+                    }
                     
                     clearTimeout(timeout)
                     window.removeEventListener('message', messageHandler)
