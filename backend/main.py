@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -1056,10 +1056,12 @@ def scan_emails_task(db: Session, search_query: str = None, hours_back: int = No
                     db.commit()
                     print(f"✅ Refreshed token for {user.email}")
                 
-                # Create Gmail service with user's credentials
-                from googleapiclient.discovery import build
-                email_service = build('gmail', 'v1', credentials=creds)
-                current_email_service = email_service
+                # Create GmailService with user's credentials
+                user_gmail_service = GmailService()
+                user_gmail_service.creds = creds
+                user_gmail_service.service = build('gmail', 'v1', credentials=creds)
+                email_service = user_gmail_service
+                current_email_service = user_gmail_service
                 print(f"✅ Gmail service created for {user.email}")
                 
             except Exception as e:
