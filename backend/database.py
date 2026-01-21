@@ -12,7 +12,16 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)  # Gmail address
     name = Column(String, nullable=True)
-    gmail_token = Column(Text, nullable=True)  # Encrypted OAuth token
+    
+    # OAuth Token Storage (per-user)
+    gmail_access_token = Column(Text, nullable=True)  # Encrypted OAuth access token
+    gmail_refresh_token = Column(Text, nullable=True)  # Encrypted OAuth refresh token
+    gmail_token_expiry = Column(DateTime, nullable=True)  # When token expires
+    gmail_scopes = Column(Text, nullable=True)  # JSON array of granted scopes
+    
+    # Legacy field (deprecated - will remove after migration)
+    gmail_token = Column(Text, nullable=True)  # Old encrypted OAuth token
+    
     is_active = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login = Column(DateTime, nullable=True)

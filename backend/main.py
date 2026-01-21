@@ -17,6 +17,8 @@ from imap_service import IMAPService
 from extractor import DataExtractor
 from config import settings
 from utils import generate_unique_id, check_duplicate_candidate
+from oauth_handler import WebOAuthHandler
+from session_manager import SessionManager
 
 app = FastAPI(title="Email-to-Candidate Automation")
 
@@ -689,7 +691,175 @@ async def logout():
         except Exception as e:
             print(f"⚠️ Could not delete token.json: {e}")
     
-    return {"success": True, "message": "Logged out successfully. Next login will prompt for account selection."}
+    return {" success": True, "message": "Logged out successfully. Next login will prompt for account selection."}
+
+# ============================
+# NEW: Web OAuth Endpoints for Multi-User Support
+# ============================
+
+# Store OAuth states temporarily (in production, use Redis or database)
+oauth_states = {}
+
+@app.get("/api/auth/google/login")
+async def google_oauth_login():
+    """
+    Initiate OAuth flow - returns Google OAuth URL for user to visit
+    """
+    try:
+        oauth_handler = WebOAuthHandler()
+        auth_data = oauth_handler.generate_auth_url()
+        
+        # Store state for verification (in production, use Redis with expiry)
+        oauth_states[auth_data['state']] = {
+            'created_at': datetime.utcnow().isoformat(),
+            'used': False
+        }
+        
+        return {
+            "success": True,
+            "auth_url": auth_data['auth_url'],
+            "message": "Redirect user to auth_url"
+        }
+    except Exception as e:
+        print(f"❌ Error generating OAuth URL: {e}")
+        raise HTTPException(status_code=500, detail=f"OAuth initialization failed: {str(e)}")
+
+@app.get("/api/auth/google/callback")
+async def google_oauth_callback(
+    code: str = Query(..., description="Authorization code from Google"),
+    state: str = Query(..., description="State for CSRF protection"),
+    db: Session = Depends(get_db)
+):
+    """
+    OAuth callback - exchanges code for tokens and creates session
+    """
+    try:
+        # Verify state
+        if state not in oauth_states or oauth_states[state].get('used'):
+            raise HTTPException(status_code=400, detail="Invalid or expired state")
+        
+        # Mark state as used
+        oauth_states[state]['used'] = True
+        
+        # Exchange code for tokens
+        oauth_handler = WebOAuthHandler()
+        token_data = oauth_handler.handle_callback(code, state, state)
+        
+        # Get or create user
+        user = db.query(User).filter(User.email == token_data['email']).first()
+        if not user:
+            user = User(
+                email=token_data['email'],
+                name=token_data['email'].split('@')[0],
+                is_active=1
+            )
+            db.add(user)
+        
+        # Store tokens in user record
+        user.gmail_access_token = token_data['access_token']
+        user.gmail_refresh_token = token_data['refresh_token']
+        user.gmail_token_expiry = datetime.fromisoformat(token_data['token_expiry']) if token_data['token_expiry'] else None
+        user.gmail_scopes = token_data['scopes']
+        user.last_login = datetime.utcnow()
+        
+        db.commit()
+        db.refresh(user)
+        
+        # Create session
+        session_token = SessionManager.create_session(user)
+        
+        # Return HTML that closes window or redirects
+        return HTMLResponse(f"""
+        <html>
+        <head><title>Login Successful</title></head>
+        <body>
+            <script>
+                // Store session token
+                const sessionData = {{
+                    token: '{session_token}',
+                    user: {{
+                        id: {user.id},
+                        email: '{user.email}',
+                        name: '{user.name}'
+                    }}
+                }};
+                
+                // Try to send to parent window (popup scenario)
+                if (window.opener) {{
+                    window.opener.postMessage({{
+                        type: 'OAUTH_SUCCESS',
+                        data: sessionData
+                    }}, window.location.origin);
+                    window.close();
+                }} else {{
+                    // Redirect scenario
+                    localStorage.setItem('crm_session', JSON.stringify(sessionData));
+                    window.location.href = '/';
+                }}
+            </script>
+            <h2>✅ Login Successful!</h2>
+            <p>Redirecting...</p>
+        </body>
+        </html>
+        """)
+        
+    except Exception as e:
+        print(f"❌ OAuth callback error: {e}")
+        return HTMLResponse(f"""
+        <html>
+        <head><title>Login Failed</title></head>
+        <body>
+            <h2>❌ Login Failed</h2>
+            <p>{str(e)}</p>
+            <script>
+                if (window.opener) {{
+                    window.opener.postMessage({{
+                        type: 'OAUTH_ERROR',
+                        error: '{str(e)}'
+                    }}, window.location.origin);
+                    window.close();
+                }} else {{
+                    setTimeout(() => window.location.href = '/', 3000);
+                }}
+            </script>
+        </body>
+        </html>
+        """, status_code=401)
+
+@app.get("/api/auth/me")
+async def get_current_user(
+    authorization: Optional[str] = Query(None, alias="session_token"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get current authenticated user from session token
+    """
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No session token provided")
+    
+    # Verify session
+    payload = SessionManager.verify_session(authorization)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+    
+    # Get user from database
+    user = db.query(User).filter(User.id == payload['user_id']).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "success": True,
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "last_login": user.last_login.isoformat() if user.last_login else None
+        }
+    }
+
+# ============================
+# END: New OAuth Endpoints
+# ============================
 
 @app.post("/api/auth/disconnect")
 async def disconnect_email():
