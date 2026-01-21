@@ -17,8 +17,8 @@ class WebOAuthHandler:
     
     def __init__(self):
         self.scopes = settings.GMAIL_SCOPES
-        # Use VPS IP by default, fallback to localhost for development
-        self.redirect_uri = os.getenv('OAUTH_REDIRECT_URI', 'http://76.13.17.251:8000/api/auth/google/callback')
+        # FORCE VPS IP - Debugging issue where it stays on localhost
+        self.redirect_uri = 'http://76.13.17.251:8000/api/auth/google/callback'
         
     def generate_auth_url(self, state: Optional[str] = None) -> Dict[str, str]:
         """
