@@ -17,7 +17,7 @@ class GmailService:
         self.service = None
         
     def authenticate(self):
-        """Authenticate with Gmail API - always shows account selector"""
+        """Authenticate with Gmail API - uses existing token or fails gracefully"""
         # Check if token file exists
         if os.path.exists(settings.GMAIL_TOKEN_FILE):
             self.creds = Credentials.from_authorized_user_file(
@@ -25,22 +25,40 @@ class GmailService:
                 settings.GMAIL_SCOPES
             )
         
-        # If credentials are invalid or don't exist, get new ones
+        # If credentials are invalid or don't exist, try to refresh or fail gracefully
         if not self.creds or not self.creds.valid:
             if self.creds and self.creds.expired and self.creds.refresh_token:
                 try:
+                    print("🔄 Refreshing expired token...")
                     self.creds.refresh(Request())
+                    print("✅ Token refreshed successfully!")
+                    # Save refreshed token
+                    with open(settings.GMAIL_TOKEN_FILE, 'w') as token:
+                        token.write(self.creds.to_json())
                 except Exception as e:
                     print(f"❌ Token refresh failed: {e}")
-                    # Delete old token and require new authentication
+                    # Delete old token
                     if os.path.exists(settings.GMAIL_TOKEN_FILE):
                         os.remove(settings.GMAIL_TOKEN_FILE)
-                    raise Exception("Token expired. Please delete token.json and reconnect.")
+                    raise Exception("Token expired and refresh failed. Please re-authenticate locally and upload new token.json to the server.")
             else:
+                # No valid token - check if we're on a headless server
                 if not os.path.exists(settings.GMAIL_CREDENTIALS_FILE):
                     raise FileNotFoundError(
                         f"Gmail credentials file not found: {settings.GMAIL_CREDENTIALS_FILE}\n"
                         f"Please download OAuth credentials from Google Cloud Console"
+                    )
+                
+                # Check if we can open a browser (development mode)
+                import sys
+                if sys.platform == "linux" and not os.environ.get("DISPLAY"):
+                    # Headless server - cannot run browser OAuth
+                    raise Exception(
+                        "Cannot authenticate on headless server. "
+                        "Please run OAuth authentication locally:\n"
+                        "1. On your local machine: python -c 'from backend.gmail_service import GmailService; gs = GmailService(); gs.authenticate()'\n"
+                        "2. Upload generated token.json to the server\n"
+                        "3. Restart the backend"
                     )
                 
                 print("🔓 Opening browser for Gmail authentication...")
@@ -66,8 +84,9 @@ class GmailService:
                     print(f"❌ OAuth flow failed: {e}")
                     raise Exception(f"Gmail OAuth failed. Please check browser and try again. Error: {str(e)}")
             
-            # Save credentials
-            with open(settings.GMAIL_TOKEN_FILE, 'w') as token:
+                # Save credentials
+                with open(settings.GMAIL_TOKEN_FILE, 'w') as token:
+                    token.write(self.creds.to_json())
                 token.write(self.creds.to_json())
         
         self.service = build('gmail', 'v1', credentials=self.creds)
