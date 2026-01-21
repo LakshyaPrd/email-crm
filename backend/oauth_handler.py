@@ -151,10 +151,10 @@ class WebOAuthHandler:
         """Extract client ID from credentials file"""
         with open(settings.GMAIL_CREDENTIALS_FILE, 'r') as f:
             creds_data = json.load(f)
-            return creds_data['installed']['client_id']
+            return creds_data.get('web', creds_data.get('installed', {})).get('client_id')
     
     def _get_client_secret(self) -> str:
         """Extract client secret from credentials file"""
         with open(settings.GMAIL_CREDENTIALS_FILE, 'r') as f:
             creds_data = json.load(f)
-            return creds_data['installed']['client_secret']
+            return creds_data.get('web', creds_data.get('installed', {})).get('client_secret')
