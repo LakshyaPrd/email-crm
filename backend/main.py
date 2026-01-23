@@ -216,11 +216,18 @@ async def trigger_scan(
     
     print(f"📧 Scan initiated by user: {current_user.email}")
     
-    # Verify user has Gmail connected
+    # Verify user has Gmail connected with proper tokens
     if not current_user.gmail_access_token or not current_user.gmail_refresh_token:
+        missing = []
+        if not current_user.gmail_access_token:
+            missing.append("access token")
+        if not current_user.gmail_refresh_token:
+            missing.append("refresh token")
+        
+        print(f"❌ User {current_user.email} missing: {', '.join(missing)}")
         raise HTTPException(
             status_code=400,
-            detail="Gmail not connected. Please logout and login with Gmail."
+            detail=f"Gmail not properly connected (missing: {', '.join(missing)}). Please logout and login again with Gmail to grant full access."
         )
     
     search_query = request.search_query if request else None

@@ -39,7 +39,7 @@ class WebOAuthHandler:
         auth_url, _ = flow.authorization_url(
             access_type='offline',  # Gets refresh token
             include_granted_scopes='true',
-            prompt='select_account',  # Force account selection
+            prompt='consent',  # FORCE consent to always get refresh token
             state=state
         )
         
