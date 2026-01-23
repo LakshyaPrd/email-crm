@@ -1183,41 +1183,24 @@ def scan_emails_task(db: Session, search_query: str = None, hours_back: int = No
                                 f.write(file_data)
                             
                             # Extract text based on file type
+                            print(f"   📄 Extracting text from {filename}...")
                             if filename.endswith('.pdf'):
                                 resume_text = extractor.extract_text_from_pdf(resume_path)
                             elif filename.endswith(('.doc', '.docx')):
                                 resume_text = extractor.extract_text_from_docx(resume_path)
-                            elif filename.endswith('.csv'):
-                                resume_text = extractor.extract_text_from_csv(resume_path)
-                                spreadsheet_data = extractor.extract_data_from_spreadsheet(resume_path)
-                            elif filename.endswith(('.xlsx', '.xls')):
-                                resume_text = extractor.extract_text_from_excel(resume_path)
-                                spreadsheet_data = extractor.extract_data_from_spreadsheet(resume_path)
                             elif filename.endswith(('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.gif')):
                                 print(f"   🖼️  Running OCR on image...")
                                 resume_text = extractor.extract_text_from_image(resume_path)
-                                cv_data = extractor.extract_data_from_image(resume_path)
                                 print(f"   ✅ OCR extracted {len(resume_text)} characters")
                             
-                            # Extract structured data based on file type (skip if already set by OCR)
-                            if cv_data and cv_data.get('document_type') == 'image':
-                                # Already processed by OCR, skip other extraction
-                                pass
-                            elif spreadsheet_data and spreadsheet_data.get('records'):
-                                # For spreadsheets, store the parsed data
-                                cv_data = {
-                                    'document_type': 'spreadsheet',
-                                    'file_type': 'CSV' if filename.endswith('.csv') else 'Excel',
-                                    'columns': spreadsheet_data.get('columns', []),
-                                    'record_count': len(spreadsheet_data.get('records', [])),
-                                    'sample_records': spreadsheet_data.get('records', [])[:10],  # First 10 rows
-                                    'all_records': spreadsheet_data.get('records', []),
-                                    'raw_preview': spreadsheet_data.get('raw_text', '')[:2000]
-                                }
-                            elif resume_text:
-                                # Auto-detect document type (resume vs invoice/report/etc)
-                                cv_data = extractor.extract_from_document(resume_text)
-                                cv_data['file_type'] = 'PDF' if filename.endswith('.pdf') else 'Word'
+                            # Always extract as RESUME (no document type detection)
+                            if resume_text:
+                                print(f"   🔍 Parsing resume data...")
+                                cv_data = extractor.extract_from_resume(resume_text)
+                                print(f"   ✅ Extracted: {cv_data.get('personal_info', {}).get('full_name', 'Unknown')}")
+                            else:
+                                print(f"   ⚠️ No text extracted from file")
+                                cv_data = None
                             
                             break  # Use first attachment found
                 
