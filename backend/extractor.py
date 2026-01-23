@@ -598,6 +598,43 @@ class ResumeParser:
             return {}
 
 
+    def extract_from_email(self, email_body: str, email_signature: str = "") -> Dict:
+        """Extract contact information from email body and signature"""
+        combined_text = f"{email_body}\n{email_signature}"
+        
+        # Extract phones and emails
+        phones = self.extract_phones(combined_text)
+        emails = self.extract_emails(combined_text)
+        linkedin = self.extract_linkedin(combined_text)
+        
+        # Extract other URLs
+        all_urls = re.findall(r'https?://[^\s<>"{}|\\^`\[\]]+', combined_text)
+        other_urls = [url for url in all_urls if 'linkedin.com' not in url.lower()]
+        
+        # Try to extract name from signature
+        name = ""
+        if email_signature:
+            lines = email_signature.strip().split('\n')
+            for line in lines[:3]:  # Check first 3 lines
+                line = line.strip()
+                # Skip common signature starters
+                if any(skip in line.lower() for skip in ['regards', 'thanks', 'sincerely', 'cheers', '--', 'best']):
+                    continue
+                # Check if line looks like a name
+                words = line.split()
+                if 2 <= len(words) <= 4 and all(re.match(r'^[A-Za-z.\'-]+$', w) for w in words):
+                    name = line
+                    break
+        
+        return {
+            'phones': phones,
+            'emails': emails,
+            'linkedin': linkedin,
+            'other_links': other_urls[:5],
+            'name': name
+        }
+
+
 # === BACKWARD COMPATIBILITY ALIASES ===
 DataExtractor = ResumeParser  # Main alias for existing code
 CandidateExtractor = ResumeParser  # Additional alias if needed
