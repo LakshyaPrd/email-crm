@@ -574,18 +574,18 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
                                         {cvData ? (
                                             <div className="space-y-3 text-sm">
                                                 {/* Name from CV */}
-                                                {cvData.personal_info?.full_name && (
+                                                {cvData.personal_info?.name && (
                                                     <div>
                                                         <span className="text-slate-500">Name:</span>
-                                                        <p className="text-slate-300">{cvData.personal_info.full_name}</p>
+                                                        <p className="text-slate-300">{cvData.personal_info.name}</p>
                                                     </div>
                                                 )}
 
                                                 {/* Location */}
-                                                {cvData.personal_info?.current_location && (
+                                                {cvData.personal_info?.location && (
                                                     <div>
                                                         <span className="text-slate-500">Location:</span>
-                                                        <p className="text-slate-300">{cvData.personal_info.current_location}</p>
+                                                        <p className="text-slate-300">{cvData.personal_info.location}</p>
                                                     </div>
                                                 )}
 
@@ -598,25 +598,25 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
                                                 )}
 
                                                 {/* Contact */}
-                                                {cvData.contact_details && (
+                                                {cvData.personal_info && (
                                                     <>
-                                                        {cvData.contact_details.email_address && (
+                                                        {cvData.personal_info.email && (
                                                             <div>
                                                                 <span className="text-slate-500">Email:</span>
-                                                                <p className="text-slate-300">{cvData.contact_details.email_address}</p>
+                                                                <p className="text-slate-300">{cvData.personal_info.email}</p>
                                                             </div>
                                                         )}
-                                                        {cvData.contact_details.mobile_numbers?.length > 0 && (
+                                                        {cvData.personal_info.all_phones?.length > 0 && (
                                                             <div>
                                                                 <span className="text-slate-500">Phone:</span>
-                                                                <p className="text-slate-300">{cvData.contact_details.mobile_numbers.join(', ')}</p>
+                                                                <p className="text-slate-300">{cvData.personal_info.all_phones.join(', ')}</p>
                                                             </div>
                                                         )}
-                                                        {cvData.contact_details.linkedin_url && (
+                                                        {cvData.personal_info.linkedin && (
                                                             <div>
                                                                 <span className="text-slate-500">LinkedIn:</span>
-                                                                <a href={cvData.contact_details.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline block truncate">
-                                                                    {cvData.contact_details.linkedin_url}
+                                                                <a href={cvData.personal_info.linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline block truncate">
+                                                                    {cvData.personal_info.linkedin}
                                                                 </a>
                                                             </div>
                                                         )}
@@ -624,14 +624,15 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
                                                 )}
 
                                                 {/* Education */}
-                                                {cvData.education_certifications?.education?.length > 0 && (
+                                                {cvData.education?.length > 0 && (
                                                     <div>
                                                         <span className="text-slate-500">Education:</span>
                                                         <div className="mt-1 space-y-1">
-                                                            {cvData.education_certifications.education.slice(0, 3).map((edu: any, i: number) => (
+                                                            {cvData.education.slice(0, 3).map((edu: any, i: number) => (
                                                                 <p key={i} className="text-slate-300 text-xs">
                                                                     {edu.degree} {edu.major && `in ${edu.major}`}
                                                                     {edu.institution && ` - ${edu.institution}`}
+                                                                    {edu.year && ` (${edu.year})`}
                                                                 </p>
                                                             ))}
                                                         </div>
@@ -639,13 +640,13 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
                                                 )}
 
                                                 {/* Skills */}
-                                                {cvData.software_experience?.length > 0 && (
+                                                {cvData.skills?.length > 0 && (
                                                     <div>
                                                         <span className="text-slate-500">Skills:</span>
                                                         <div className="flex flex-wrap gap-1 mt-1">
-                                                            {cvData.software_experience.slice(0, 8).map((skill: any, i: number) => (
+                                                            {cvData.skills.slice(0, 8).map((skill: any, i: number) => (
                                                                 <span key={i} className="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded text-xs">
-                                                                    {skill.software_name || skill}
+                                                                    {skill}
                                                                 </span>
                                                             ))}
                                                         </div>
