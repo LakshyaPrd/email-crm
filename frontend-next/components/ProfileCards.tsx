@@ -653,6 +653,59 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
                                                     </div>
                                                 )}
 
+                                                {/* Work Experience */}
+                                                {cvData.work_history?.length > 0 && (
+                                                    <div>
+                                                        <span className="text-slate-500">Experience:</span>
+                                                        <div className="mt-1 space-y-2">
+                                                            {cvData.work_history.slice(0, 3).map((exp: any, i: number) => (
+                                                                <div key={i} className="text-xs">
+                                                                    <p className="text-slate-200 font-medium">{exp.job_title}</p>
+                                                                    <p className="text-slate-400">{exp.company}</p>
+                                                                    {exp.location && <p className="text-slate-500">{exp.location}</p>}
+                                                                    <p className="text-slate-500">{exp.start_date} - {exp.end_date} ({exp.duration})</p>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Certifications */}
+                                                {cvData.certifications?.length > 0 && (
+                                                    <div>
+                                                        <span className="text-slate-500">Certifications:</span>
+                                                        <div className="mt-1 space-y-1">
+                                                            {cvData.certifications.map((cert: any, i: number) => (
+                                                                <p key={i} className="text-slate-300 text-xs">• {cert}</p>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Professional Info */}
+                                                {cvData.professional_info && (
+                                                    <>
+                                                        {cvData.professional_info.years_experience && (
+                                                            <div>
+                                                                <span className="text-slate-500">Total Experience:</span>
+                                                                <p className="text-slate-300">{cvData.professional_info.years_experience} years</p>
+                                                            </div>
+                                                        )}
+                                                        {cvData.professional_info.gcc_experience === 'Yes' && (
+                                                            <div>
+                                                                <span className="text-slate-500">GCC Experience:</span>
+                                                                <p className="text-green-400">Yes</p>
+                                                            </div>
+                                                        )}
+                                                        {cvData.professional_info.willing_to_relocate === 'Yes' && (
+                                                            <div>
+                                                                <span className="text-slate-500">Relocation:</span>
+                                                                <p className="text-green-400">Open to relocate</p>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
+
                                                 {/* Experience */}
                                                 {cvData.position_discipline?.years_of_experience && (
                                                     <div>
