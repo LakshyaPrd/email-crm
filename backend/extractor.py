@@ -68,7 +68,7 @@ class DataExtractor:
             if keyword in text_lower:
                 resume_score += 1
         
-        # Count non-resume indicators
+        # Count non-resume indicators (invoices, reports, etc)
         non_resume_score = 0
         for keyword in self.NON_RESUME_KEYWORDS:
             if keyword in text_lower:
@@ -76,18 +76,30 @@ class DataExtractor:
         
         # Check for typical resume sections
         has_education = any(kw in text_lower for kw in self.EDUCATION_KEYWORDS)
-        has_work_exp = bool(re.search(r'(work|professional|employment)\s*(experience|history)', text_lower))
+        has_work_exp = bool(re.search(r'(work|professional|employment)\\s*(experience|history)', text_lower))
         has_skills = 'skill' in text_lower
         
+        # Check for contact info patterns (strong resume indicators)
+        has_email = bool(re.search(self.EMAIL_PATTERN, text))
+        has_phone = any(bool(re.search(pattern, text)) for pattern in self.PHONE_PATTERNS)
+        
         if has_education:
-            resume_score += 2
+            resume_score += 3  # Increased weight
         if has_work_exp:
-            resume_score += 2
+            resume_score += 3  # Increased weight
         if has_skills:
+            resume_score += 2  # Increased weight
+        if has_email:
+            resume_score += 1
+        if has_phone:
             resume_score += 1
         
-        # Decision: if resume score is significantly higher, it's a resume
-        return resume_score > non_resume_score and resume_score >= 3
+        # Decision: Lower threshold to catch more resumes
+        # If we see education+work experience OR good resume score, it's likely a CV
+        if (has_education and has_work_exp):
+            return True  # Strong CV indicator
+        
+        return resume_score > non_resume_score and resume_score >= 2  # Lowered from 3 to 2
     
     def detect_document_type(self, text: str) -> str:
         """Detect what type of document this is"""
@@ -96,7 +108,11 @@ class DataExtractor:
         
         text_lower = text.lower()
         
-        # Check for specific document types
+        # CHECK FOR RESUME FIRST - Most common in email attachments
+        if self.is_resume(text):
+            return 'resume'
+        
+        # Then check for other specific document types
         if any(kw in text_lower for kw in ['invoice', 'bill to', 'amount due', 'payment due']):
             return 'invoice'
         if any(kw in text_lower for kw in ['quotation', 'quote', 'estimate', 'price list']):
@@ -105,12 +121,11 @@ class DataExtractor:
             return 'proposal'
         if any(kw in text_lower for kw in ['contract', 'agreement', 'hereby agree', 'terms and conditions']):
             return 'contract'
-        if any(kw in text_lower for kw in ['report', 'analysis', 'findings', 'conclusion']):
-            return 'report'
         if any(kw in text_lower for kw in ['meeting minutes', 'agenda', 'attendees', 'action items']):
             return 'meeting_notes'
-        if self.is_resume(text):
-            return 'resume'
+        # Check report LAST since many CVs mention "summary", "analysis", etc
+        if any(kw in text_lower for kw in ['monthly report', 'annual report', 'financial report']):
+            return 'report'
         
         return 'general_document'
     
