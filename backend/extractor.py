@@ -479,28 +479,65 @@ class ResumeParser:
         relocation_keywords = ['open to relocation', 'willing to relocate', 'ready to relocate', 'can relocate']
         willing_to_relocate = any(keyword in text.lower() for keyword in relocation_keywords)
 
-        # Build result dictionary
+        # Build result dictionary in OLD FORMAT that frontend expects
         result = {
             'personal_info': {
-                'name': name,
-                'email': emails[0] if emails else "",
-                'phone': phones[0] if phones else "",
-                'all_phones': phones,
-                'all_emails': emails,
-                'linkedin': linkedin,
-                'github': github,
-                'dob': dob,
-                'location': location,
+                'full_name': name,  # Frontend expects full_name, not name
+                'date_of_birth': dob,
+                'nationality': '',  # Parser doesn't extract this yet
+                'marital_status': '',
+                'military_status': '',
+                'current_location': location,  # Frontend expects current_location, not location
             },
-            'professional_info': {
-                'years_experience': years_experience,
-                'gcc_experience': 'Yes' if has_gcc_exp else 'No',
-                'willing_to_relocate': 'Yes' if willing_to_relocate else 'No',
+            'contact_details': {
+                'mobile_numbers': phones,
+                'email_address': emails[0] if emails else "",  # Frontend expects email_address
+                'linkedin_url': linkedin,
+                'portfolio_link': github,  # Use github as portfolio for now
+                'other_profiles': [],
             },
-            'education': education,
-            'skills': skills,
-            'work_history': work_history,
-            'certifications': certifications,
+            'position_discipline': {
+                'current_position': '',
+                'discipline': '',
+                'sub_discipline': '',
+                'years_of_experience': years_experience,
+                'relevant_experience': '',
+            },
+            'work_history': [
+                {
+                    'job_title': exp['job_title'],
+                    'seniority_level': '',
+                    'company_name': exp['company'],
+                    'company_location': exp['location'],
+                    'start_date': exp['start_date'],
+                    'end_date': exp['end_date'],
+                    'duration': exp['duration'],
+                    'mode_of_work': '',
+                    'responsibilities': '',
+                    'key_projects': '',
+                }
+                for exp in work_history
+            ],
+            'project_experience': {
+                'total_experience': years_experience,
+                'gcc_experience': 'Yes' if has_gcc_exp else '',
+                'gcc_projects': has_gcc_exp,
+                'worked_with_mncs': '',
+            },
+            'software_experience': [  # Frontend expects software_experience, not skills
+                {'software_name': skill, 'years_experience': '', 'proficiency_level': ''}
+                for skill in skills
+            ],
+            'education_certifications': {
+                'education': education,  # Already in correct format
+                'certifications': certifications,
+            },
+            'salary_availability': {
+                'current_salary': '',
+                'expected_salary': '',
+                'notice_period': '',
+                'willing_to_relocate': 'Yes' if willing_to_relocate else '',
+            },
         }
 
         return result
