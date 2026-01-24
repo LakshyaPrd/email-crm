@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 interface Candidate {
     id?: number
@@ -26,14 +27,8 @@ interface Candidate {
     extracted_phones?: string
     extracted_emails?: string
     extracted_links?: string
-    // Recruiter info
     recruiter_id?: number
     recruiter_name?: string
-}
-
-interface CandidateDetail extends Candidate {
-    email_body_html: string | null
-    email_signature: string | null
 }
 
 interface ProfileCardsProps {
@@ -41,122 +36,18 @@ interface ProfileCardsProps {
     onRefresh: () => void
 }
 
+type TabType = 'notes' | 'tags' | 'email' | 'cv'
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
 
 export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProps) {
-    const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null)
-    const [candidateDetail, setCandidateDetail] = useState<Candidate | null>(null)
-    const [loading, setLoading] = useState(false)
-    const [notes, setNotes] = useState('')
-    const [tags, setTags] = useState<string[]>([])
-    const [newTag, setNewTag] = useState('')
-    const [savingNotes, setSavingNotes] = useState(false)
-    const [savingTags, setSavingTags] = useState(false)
-    // Blur reveal states for summaries
-    const [emailSummaryRevealed, setEmailSummaryRevealed] = useState(false)
-    const [cvSummaryRevealed, setCvSummaryRevealed] = useState(false)
+    const router = useRouter()
+    const [expandedCard, setExpandedCard] = useState<number | null>(null)
+    const [activeTab, setActiveTab] = useState<{ [key: number]: TabType }>({})
+    const [notes, setNotes] = useState<{ [key: number]: string }>({})
+    const [tags, setTags] = useState<{ [key: number]: string[] }>({})
+    const [newTag, setNewTag] = useState<{ [key: number]: string }>({})
 
-    // Get candidate identifier
-    const getCandidateKey = (candidate: Candidate): number => {
-        return candidate.id || 0
-    }
-
-    // Fetch candidate details when selected
-    const fetchCandidateDetail = async (id: number) => {
-        setLoading(true)
-        try {
-            const response = await fetch(`${API_URL}/candidates/${id}`)
-            if (response.ok) {
-                const data = await response.json()
-                setCandidateDetail(data)
-                setNotes(data.notes || '')
-                setTags(data.tags ? JSON.parse(data.tags) : [])
-            }
-        } catch (error) {
-            console.error('Error fetching candidate details:', error)
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    // Handle card click
-    const handleCardClick = (candidate: Candidate) => {
-        setSelectedCandidate(candidate)
-        setEmailSummaryRevealed(false)
-        setCvSummaryRevealed(false)
-        if (candidate.id) {
-            fetchCandidateDetail(candidate.id)
-        }
-    }
-
-    // Close detail panel
-    const closeDetailPanel = () => {
-        setSelectedCandidate(null)
-        setCandidateDetail(null)
-        setEmailSummaryRevealed(false)
-        setCvSummaryRevealed(false)
-    }
-
-    // Save notes
-    const saveNotes = async () => {
-        if (!candidateDetail || !candidateDetail.id) return
-        setSavingNotes(true)
-        try {
-            await fetch(`${API_URL}/candidates/${candidateDetail.id}/notes`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ notes })
-            })
-        } catch (error) {
-            console.error('Error saving notes:', error)
-        } finally {
-            setSavingNotes(false)
-        }
-    }
-
-    // Add tag
-    const addTag = async () => {
-        if (!newTag.trim() || !candidateDetail || !candidateDetail.id) return
-        const updatedTags = [...tags, newTag.trim()]
-        setSavingTags(true)
-        try {
-            await fetch(`${API_URL}/candidates/${candidateDetail.id}/tags`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tags: updatedTags })
-            })
-            setTags(updatedTags)
-            setNewTag('')
-        } catch (error) {
-            console.error('Error adding tag:', error)
-        } finally {
-            setSavingTags(false)
-        }
-    }
-
-    // Remove tag
-    const removeTag = async (tagToRemove: string) => {
-        if (!candidateDetail || !candidateDetail.id) return
-        const updatedTags = tags.filter(t => t !== tagToRemove)
-        try {
-            await fetch(`${API_URL}/candidates/${candidateDetail.id}/tags`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tags: updatedTags })
-            })
-            setTags(updatedTags)
-        } catch (error) {
-            console.error('Error removing tag:', error)
-        }
-    }
-
-    // Download CV
-    const downloadCV = async () => {
-        if (!candidateDetail) return
-        window.open(`${API_URL}/resume/${candidateDetail.id}`, '_blank')
-    }
-
-    // Get initials for avatar
     const getInitials = (name: string) => {
         return name
             .split(' ')
@@ -166,578 +57,392 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
             .slice(0, 2)
     }
 
-    // Extract info from CV data for display
-    const getCandidateInfo = (cvData: any) => {
-        if (!cvData) return null
-
-        const info: any = {}
-
-        // Location
-        if (cvData.personal_info?.current_location) {
-            info.location = cvData.personal_info.current_location
+    const toggleCard = (candidateId: number, tab: TabType = 'notes') => {
+        if (expandedCard === candidateId) {
+            setExpandedCard(null)
+        } else {
+            setExpandedCard(candidateId)
+            setActiveTab({ ...activeTab, [candidateId]: tab })
         }
-
-        // Nationality
-        if (cvData.personal_info?.nationality) {
-            info.nationality = cvData.personal_info.nationality
-        }
-
-        // Experience
-        if (cvData.position_discipline?.years_of_experience) {
-            info.experience = cvData.position_discipline.years_of_experience
-        }
-
-        // Current Position
-        if (cvData.position_discipline?.current_position) {
-            info.position = cvData.position_discipline.current_position
-        }
-
-        return info
     }
 
-    // Get CV data
-    const cvData = candidateDetail?.cv_data
-    const candidateInfo = cvData ? getCandidateInfo(cvData) : null
+    const switchTab = (candidateId: number, tab: TabType) => {
+        setActiveTab({ ...activeTab, [candidateId]: tab })
+    }
+
+    const addTag = (candidateId: number) => {
+        const tag = newTag[candidateId]?.trim()
+        if (tag && !tags[candidateId]?.includes(tag)) {
+            setTags({
+                ...tags,
+                [candidateId]: [...(tags[candidateId] || []), tag]
+            })
+            setNewTag({ ...newTag, [candidateId]: '' })
+        }
+    }
+
+    const removeTag = (candidateId: number, tagToRemove: string) => {
+        setTags({
+            ...tags,
+            [candidateId]: tags[candidateId]?.filter(t => t !== tagToRemove) || []
+        })
+    }
+
+    if (candidates.length === 0) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                    <div className="text-6xl mb-4">📭</div>
+                    <h3 className="text-xl font-semibold text-gray-600 mb-2">No Candidates Found</h3>
+                    <p className="text-gray-500">Start by scanning emails to find candidates</p>
+                </div>
+            </div>
+        )
+    }
 
     return (
-        <div className="flex h-[calc(100vh-280px)] min-h-[500px]">
-            {/* Left Panel - Candidate Cards List */}
-            <div className={`${selectedCandidate ? 'w-1/3' : 'w-full'} border-r border-gray-200 overflow-y-auto pr-2 transition-all`}>
-                {/* Header */}
-                <div className="sticky top-0 bg-gradient-to-r from-slate-800 to-slate-700 backdrop-blur z-10 p-3 mb-3 rounded-xl">
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm text-white font-medium">
-                            {candidates.length} candidate{candidates.length !== 1 ? 's' : ''}
-                        </span>
-                        <button
-                            onClick={onRefresh}
-                            className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700"
-                        >
-                            🔄 Refresh
-                        </button>
-                    </div>
-                </div>
-
-                <div className="space-y-3">
-                    {candidates.map((candidate) => {
-                        const candidateId = candidate.id || 0
-                        const isActive = selectedCandidate && selectedCandidate.id === candidateId
-
-                        return (
-                            <div
-                                key={candidateId}
-                                onClick={() => handleCardClick(candidate)}
-                                className={`p-4 rounded-xl border cursor-pointer transition-all shadow-sm hover:shadow-md ${
-                                    isActive
-                                        ? 'border-blue-500 bg-blue-50'
-                                        : 'border-gray-200 bg-white hover:border-blue-300'
-                                }`}
-                            >
-                                <div className="flex items-start gap-3">
-                                    {/* Avatar */}
-                                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                                        {getInitials(candidate.name || 'UN')}
-                                    </div>
-
-                                    <div className="flex-1 min-w-0">
-                                        {/* Unique ID Badge */}
-                                        <div className="flex items-center gap-2 text-xs mb-1">
-                                            <span className="text-gray-500 font-mono">CV ID: {candidate.unique_id || 'N/A'}</span>
-                                        </div>
-
-                                        {/* Name */}
-                                        <h3 className="font-semibold text-gray-900 truncate">
-                                            {candidate.name || 'Unknown'}
-                                        </h3>
-
-                                        {/* Subject as Role */}
-                                        <p className="text-sm text-gray-600 truncate">
-                                            {candidate.email_subject || 'No subject'}
-                                        </p>
-
-                                        {/* Meta info */}
-                                        <div className="flex items-center gap-2 mt-2 text-xs text-gray-500 flex-wrap">
-                                            {candidate.resume_filename && (
-                                                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded">
-                                                    📎 CV
-                                                </span>
-                                            )}
-                                            <span>
-                                                {candidate.email_date 
-                                                    ? new Date(candidate.email_date).toLocaleDateString() 
-                                                    : 'No date'}
-                                            </span>
-                                            {/* Show recruiter name */}
-                                            {candidate.recruiter_name && (
-                                                <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded">
-                                                    👤 {candidate.recruiter_name}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )
-                    })}
-
-                    {candidates.length === 0 && (
-                        <div className="text-center py-12 text-slate-500">
-                            <div className="text-4xl mb-3">📭</div>
-                            <p>No candidates found</p>
-                            <p className="text-sm mt-1">Scan emails to find candidates</p>
-                        </div>
-                    )}
+        <div className="h-full overflow-y-auto">
+            {/* Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-slate-800 to-slate-700 backdrop-blur z-10 p-3 mb-3 rounded-xl">
+                <div className="flex items-center justify-between">
+                    <span className="text-sm text-white font-medium">
+                        {candidates.length} candidate{candidates.length !== 1 ? 's' : ''}
+                    </span>
+                    <button
+                        onClick={onRefresh}
+                        className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700"
+                    >
+                        🔄 Refresh
+                    </button>
                 </div>
             </div>
 
-            {/* Right Panel - Details */}
-            {selectedCandidate && (
-                <div className="flex-1 overflow-y-auto pl-4">
-                    {loading ? (
-                        <div className="h-full flex items-center justify-center">
-                            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-                        </div>
-                    ) : candidateDetail ? (
-                        <div className="space-y-4">
-                            {/* Header with actions and Close button */}
-                            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 relative">
-                                {/* Close Button */}
-                                <button
-                                    onClick={closeDetailPanel}
-                                    className="absolute top-3 right-3 w-8 h-8 bg-slate-700 hover:bg-red-600 text-slate-400 hover:text-white rounded-lg flex items-center justify-center transition-colors"
-                                    title="Close"
-                                >
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
+            {/* Candidate Cards */}
+            <div className="space-y-4 pb-4">
+                {candidates.map((candidate) => {
+                    const candidateId = candidate.id || 0
+                    const isExpanded = expandedCard === candidateId
+                    const currentTab = activeTab[candidateId] || 'notes'
+                    const cvData = candidate.cv_data || {}
+                    const personalInfo = cvData.personal_info || {}
+                    const professionalInfo = cvData.professional_info || {}
 
-                                <div className="flex items-start gap-4 pr-10">
-                                    {/* Large Avatar */}
-                                    <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0">
-                                        {getInitials(candidateDetail.name || 'UN')}
+                    return (
+                        <div
+                            key={candidateId}
+                            className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden transition-all"
+                        >
+                            {/* Profile Header */}
+                            <div className="p-6">
+                                <div className="flex items-start gap-6">
+                                    {/* Profile Photo */}
+                                    <div className="relative">
+                                        <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center text-white text-3xl font-bold shrink-0 shadow-lg">
+                                            {getInitials(candidate.name || 'UN')}
+                                        </div>
+                                        {/* Online Status */}
+                                        <div className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
                                     </div>
 
+                                    {/* Basic Info */}
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-xs font-mono text-slate-500 bg-slate-700 px-2 py-0.5 rounded">
-                                                {candidateDetail.unique_id}
-                                            </span>
+                                            <h3 className="text-2xl font-bold text-gray-900">
+                                                {personalInfo.name || candidate.name || 'Unknown'}
+                                            </h3>
+                                            {/* Verification Badge */}
+                                            <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                            </svg>
                                         </div>
-                                        <h2 className="text-xl font-bold text-white">{candidateDetail.name}</h2>
-                                        <p className="text-slate-400">{candidateDetail.email_subject}</p>
+                                        <p className="text-sm text-gray-600 mb-3">
+                                            {candidate.email_subject || 'No subject'}
+                                        </p>
 
-                                        {/* Quick Info Row - Like Indeed */}
-                                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-sm">
-                                            {candidateInfo?.location && (
-                                                <span className="text-slate-400">
-                                                    <span className="text-slate-500">Location:</span> <span className="text-blue-400">{candidateInfo.location}</span>
-                                                </span>
+                                        {/* Contact Info */}
+                                        <div className="flex flex-wrap gap-4 text-xs text-gray-600">
+                                            {candidate.email && (
+                                                <div className="flex items-center gap-1">
+                                                    <span>📧</span>
+                                                    <span>{candidate.email}</span>
+                                                </div>
                                             )}
-                                            {candidateInfo?.nationality && (
-                                                <span className="text-slate-400">
-                                                    <span className="text-slate-500">Nationality:</span> <span className="text-blue-400">{candidateInfo.nationality}</span>
-                                                </span>
+                                            {personalInfo.phone && (
+                                                <div className="flex items-center gap-1">
+                                                    <span>📞</span>
+                                                    <span>{personalInfo.phone}</span>
+                                                </div>
                                             )}
-                                            {candidateInfo?.experience && (
-                                                <span className="text-slate-400">
-                                                    <span className="text-slate-500">Work experience:</span> <span className="text-blue-400">{candidateInfo.experience}</span>
-                                                </span>
+                                            {personalInfo.location && (
+                                                <div className="flex items-center gap-1">
+                                                    <span>📍</span>
+                                                    <span>{personalInfo.location}</span>
+                                                </div>
                                             )}
                                         </div>
                                     </div>
 
                                     {/* Action Buttons */}
                                     <div className="flex flex-col gap-2">
-                                        {candidateDetail.resume_filename && (
-                                            <button
-                                                onClick={downloadCV}
-                                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                                            >
-                                                ⬇️ Download CV
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* NOTES AND TAGS - TOP PRIORITY */}
-                            <div className="grid grid-cols-2 gap-4">
-                                {/* Notes Section - LEFT */}
-                                <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-                                    <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                                        📝 Notes
-                                    </h3>
-
-                                    <textarea
-                                        value={notes}
-                                        onChange={(e) => setNotes(e.target.value)}
-                                        placeholder="Add notes about this candidate..."
-                                        className="w-full h-24 px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 resize-none"
-                                    />
-
-                                    <div className="flex justify-end mt-2">
-                                        <button
-                                            onClick={saveNotes}
-                                            disabled={savingNotes}
-                                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-sm"
-                                        >
-                                            {savingNotes ? 'Saving...' : 'Save Notes'}
+                                        <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                                            Hire Me
+                                        </button>
+                                        <button className="px-4 py-2 bg-white text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition-colors border border-gray-300 font-medium">
+                                            Follow
                                         </button>
                                     </div>
                                 </div>
 
-                                {/* Tags Section - RIGHT */}
-                                <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-                                    <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                                        🏷️ Tags
-                                    </h3>
-
-                                    <div className="flex flex-wrap gap-2 mb-3">
-                                        {tags.map((tag, i) => (
-                                            <span 
-                                                key={i} 
-                                                className="px-3 py-1 bg-blue-500/20 text-blue-400 rounded-full text-sm flex items-center gap-2"
-                                            >
-                                                {tag}
-                                                <button 
-                                                    onClick={() => removeTag(tag)}
-                                                    className="hover:text-red-400 transition-colors"
-                                                >
-                                                    ×
-                                                </button>
+                                {/* Stats Row */}
+                                <div className="grid grid-cols-4 gap-3 mt-6">
+                                    <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-lg p-3 border border-emerald-100">
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-emerald-600 text-lg">📊</span>
+                                            <span className="text-emerald-600 text-2xl font-bold">
+                                                {professionalInfo.years_experience || 'N/A'}
                                             </span>
-                                        ))}
-                                        {tags.length === 0 && (
-                                            <span className="text-slate-500 text-sm">No tags added</span>
-                                        )}
+                                        </div>
+                                        <div className="text-xs text-gray-600 mt-1">Experience</div>
                                     </div>
-
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            value={newTag}
-                                            onChange={(e) => setNewTag(e.target.value)}
-                                            onKeyPress={(e) => e.key === 'Enter' && addTag()}
-                                            placeholder="Add a tag..."
-                                            className="flex-1 px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-                                        />
-                                        <button
-                                            onClick={addTag}
-                                            disabled={!newTag.trim() || savingTags}
-                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm"
-                                        >
-                                            Add
-                                        </button>
+                                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-100">
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-blue-600 text-lg">🌍</span>
+                                            <span className="text-blue-600 text-2xl font-bold">
+                                                {professionalInfo.gcc_experience || 'N/A'}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs text-gray-600 mt-1">GCC</div>
+                                    </div>
+                                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-3 border border-purple-100">
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-purple-600 text-lg">💡</span>
+                                            <span className="text-purple-600 text-2xl font-bold">
+                                                {cvData.skills?.length || 0}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs text-gray-600 mt-1">Skills</div>
+                                    </div>
+                                    <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg p-3 border border-amber-100">
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-amber-600 text-lg">🏢</span>
+                                            <span className="text-amber-600 text-2xl font-bold">
+                                                {cvData.work_history?.length || 0}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs text-gray-600 mt-1">Jobs</div>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* DETAILED INFORMATION WITH BLUR EFFECT */}
-                            <div className="grid grid-cols-2 gap-4">
-                                {/* Left Column - Email Info */}
-                                <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-                                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                                        📧 Email Information
-                                    </h3>
-
-                                    <div 
-                                        className={`relative cursor-pointer ${!emailSummaryRevealed ? 'blur-sm select-none' : ''}`}
-                                        onClick={() => setEmailSummaryRevealed(true)}
+                            {/* Tabs */}
+                            <div className="border-t border-gray-200">
+                                <div className="flex">
+                                    <button
+                                        onClick={() => toggleCard(candidateId, 'notes')}
+                                        className={`flex-1 px-4 py-3 text-sm font-medium transition-all ${
+                                            currentTab === 'notes' && isExpanded
+                                                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
                                     >
-                                        {!emailSummaryRevealed && (
-                                            <div className="absolute inset-0 flex items-center justify-center bg-slate-900/30 rounded z-10">
-                                                <span className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">
-                                                    👁️ Click to Reveal
-                                                </span>
-                                            </div>
-                                        )}
+                                        📝 Notes
+                                    </button>
+                                    <button
+                                        onClick={() => toggleCard(candidateId, 'tags')}
+                                        className={`flex-1 px-4 py-3 text-sm font-medium transition-all ${
+                                            currentTab === 'tags' && isExpanded
+                                                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        🏷️ Tags
+                                    </button>
+                                    <button
+                                        onClick={() => toggleCard(candidateId, 'email')}
+                                        className={`flex-1 px-4 py-3 text-sm font-medium transition-all ${
+                                            currentTab === 'email' && isExpanded
+                                                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        📧 Email Info
+                                    </button>
+                                    <button
+                                        onClick={() => toggleCard(candidateId, 'cv')}
+                                        className={`flex-1 px-4 py-3 text-sm font-medium transition-all ${
+                                            currentTab === 'cv' && isExpanded
+                                                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        👤 CV Details
+                                    </button>
+                                </div>
+                            </div>
 
-                                        <div className="space-y-3 text-sm">
-                                            <div>
-                                                <span className="text-slate-500">From:</span>
-                                                <p className="text-slate-300">{candidateDetail.email_from || 'N/A'}</p>
-                                            </div>
-                                            <div>
-                                                <span className="text-slate-500">To:</span>
-                                                <p className="text-slate-300">{candidateDetail.email_to || 'N/A'}</p>
-                                            </div>
-                                            {candidateDetail.email_cc && (
-                                                <div>
-                                                    <span className="text-slate-500">CC:</span>
-                                                    <p className="text-slate-300">{candidateDetail.email_cc}</p>
-                                                </div>
-                                            )}
-                                            <div>
-                                                <span className="text-slate-500">Date:</span>
-                                                <p className="text-slate-300">
-                                                    {candidateDetail.email_date 
-                                                        ? new Date(candidateDetail.email_date).toLocaleString()
-                                                        : 'N/A'}
-                                                </p>
-                                            </div>
-                                            <div>
-                                                <span className="text-slate-500">Subject:</span>
-                                                <p className="text-slate-300">{candidateDetail.email_subject}</p>
-                                            </div>
+                            {/* Tab Content - Expandable */}
+                            {isExpanded && (
+                                <div className="border-t border-gray-200 bg-gray-50 p-6 animate-slideDown">
+                                    {/* Notes Tab */}
+                                    {currentTab === 'notes' && (
+                                        <div>
+                                            <h4 className="font-semibold text-gray-900 mb-3">Notes</h4>
+                                            <textarea
+                                                value={notes[candidateId] || ''}
+                                                onChange={(e) => setNotes({ ...notes, [candidateId]: e.target.value })}
+                                                placeholder="Add your notes about this candidate..."
+                                                className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                            />
+                                            <button className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
+                                                Save Notes
+                                            </button>
+                                        </div>
+                                    )}
 
-                                            {/* Email Body Preview */}
-                                            {candidateDetail.email_body && (
-                                                <div className="mt-4">
-                                                    <span className="text-slate-500">Message:</span>
-                                                    <div className="mt-2 p-3 bg-slate-900/50 rounded-lg text-slate-300 text-xs max-h-40 overflow-y-auto whitespace-pre-wrap">
-                                                        {candidateDetail.email_body.slice(0, 500)}
-                                                        {candidateDetail.email_body.length > 500 && '...'}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Extracted Data */}
-                                            {candidateDetail.extracted_phones && JSON.parse(candidateDetail.extracted_phones).length > 0 && (
-                                                <div>
-                                                    <span className="text-slate-500">Phones from Email:</span>
-                                                    <div className="flex flex-wrap gap-1 mt-1">
-                                                        {JSON.parse(candidateDetail.extracted_phones).map((phone: string, i: number) => (
-                                                            <span key={i} className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-xs">
-                                                                {phone}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Extracted Emails */}
-                                            <div>
-                                                <span className="text-slate-500">Emails from Email:</span>
-                                                {candidateDetail.extracted_emails && JSON.parse(candidateDetail.extracted_emails).length > 0 ? (
-                                                    <div className="flex flex-wrap gap-1 mt-1">
-                                                        {JSON.parse(candidateDetail.extracted_emails).map((email: string, i: number) => (
-                                                            <span key={i} className="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs">
-                                                                {email}
-                                                            </span>
-                                                        ))}
-                                                    </div>
+                                    {/* Tags Tab */}
+                                    {currentTab === 'tags' && (
+                                        <div>
+                                            <h4 className="font-semibold text-gray-900 mb-3">Tags</h4>
+                                            <div className="flex gap-2 mb-4">
+                                                <input
+                                                    type="text"
+                                                    value={newTag[candidateId] || ''}
+                                                    onChange={(e) => setNewTag({ ...newTag, [candidateId]: e.target.value })}
+                                                    onKeyPress={(e) => e.key === 'Enter' && addTag(candidateId)}
+                                                    placeholder="Add a tag..."
+                                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                                />
+                                                <button
+                                                    onClick={() => addTag(candidateId)}
+                                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                                                >
+                                                    Add
+                                                </button>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {tags[candidateId]?.length > 0 ? (
+                                                    tags[candidateId].map((tag, index) => (
+                                                        <span
+                                                            key={index}
+                                                            className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm flex items-center gap-2"
+                                                        >
+                                                            {tag}
+                                                            <button
+                                                                onClick={() => removeTag(candidateId, tag)}
+                                                                className="text-blue-600 hover:text-blue-900 font-bold"
+                                                            >
+                                                                ×
+                                                            </button>
+                                                        </span>
+                                                    ))
                                                 ) : (
-                                                    <p className="text-slate-400 text-xs mt-1">None</p>
-                                                )}
-                                            </div>
-
-                                            {/* Extracted Links */}
-                                            <div>
-                                                <span className="text-slate-500">Links from Email:</span>
-                                                {candidateDetail.extracted_links && JSON.parse(candidateDetail.extracted_links).length > 0 ? (
-                                                    <div className="flex flex-col gap-1 mt-1">
-                                                        {JSON.parse(candidateDetail.extracted_links).slice(0, 3).map((link: string, i: number) => (
-                                                            <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline text-xs truncate">
-                                                                {link}
-                                                            </a>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <p className="text-slate-400 text-xs mt-1">None</p>
-                                                )}
-                                            </div>
-
-                                            {/* Email Signature */}
-                                            <div className="pt-3 border-t border-slate-700">
-                                                <span className="text-slate-500">Email Signature:</span>
-                                                {candidateDetail.email_signature ? (
-                                                    <div className="mt-2 p-2 bg-slate-900/30 rounded text-slate-300 text-xs whitespace-pre-wrap">
-                                                        {candidateDetail.email_signature}
-                                                    </div>
-                                                ) : (
-                                                    <p className="text-slate-400 text-xs mt-1">None</p>
+                                                    <p className="text-gray-500 italic text-sm">No tags added yet</p>
                                                 )}
                                             </div>
                                         </div>
-                                    </div>
-                                </div>
+                                    )}
 
-                                {/* Right Column - CV Details */}
-                                <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-                                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                                        📄 CV Details
-                                    </h3>
-
-                                    <div 
-                                        className={`relative cursor-pointer ${!cvSummaryRevealed ? 'blur-sm select-none' : ''}`}
-                                        onClick={() => setCvSummaryRevealed(true)}
-                                    >
-                                        {!cvSummaryRevealed && (
-                                            <div className="absolute inset-0 flex items-center justify-center bg-slate-900/30 rounded z-10">
-                                                <span className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium">
-                                                    👁️ Click to Reveal
-                                                </span>
+                                    {/* Email Info Tab */}
+                                    {currentTab === 'email' && (
+                                        <div className="space-y-4">
+                                            <h4 className="font-semibold text-gray-900 mb-3">Email Information</h4>
+                                            <div>
+                                                <label className="text-sm font-medium text-gray-600">Subject</label>
+                                                <p className="text-gray-900 mt-1">{candidate.email_subject || 'No subject'}</p>
                                             </div>
-                                        )}
+                                            <div>
+                                                <label className="text-sm font-medium text-gray-600">From</label>
+                                                <p className="text-gray-900 mt-1">{candidate.email_from || candidate.email || 'Unknown'}</p>
+                                            </div>
+                                            <div>
+                                                <label className="text-sm font-medium text-gray-600">Date</label>
+                                                <p className="text-gray-900 mt-1">
+                                                    {candidate.email_date ? new Date(candidate.email_date).toLocaleDateString() : 'No date'}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <label className="text-sm font-medium text-gray-600">Attachments</label>
+                                                <p className="text-gray-900 mt-1">{candidate.resume_filename || 'No attachments'}</p>
+                                            </div>
+                                        </div>
+                                    )}
 
-                                        {cvData ? (
-                                            <div className="space-y-3 text-sm">
-                                                {/* Name from CV */}
-                                                {cvData.personal_info?.name && (
-                                                    <div>
-                                                        <span className="text-slate-500">Name:</span>
-                                                        <p className="text-slate-300">{cvData.personal_info.name}</p>
-                                                    </div>
-                                                )}
+                                    {/* CV Details Tab */}
+                                    {currentTab === 'cv' && (
+                                        <div className="space-y-6">
+                                            <h4 className="font-semibold text-gray-900 mb-3">CV Information</h4>
 
-                                                {/* Location */}
-                                                {cvData.personal_info?.location && (
-                                                    <div>
-                                                        <span className="text-slate-500">Location:</span>
-                                                        <p className="text-slate-300">{cvData.personal_info.location}</p>
-                                                    </div>
-                                                )}
-
-                                                {/* Nationality */}
-                                                {cvData.personal_info?.nationality && (
-                                                    <div>
-                                                        <span className="text-slate-500">Nationality:</span>
-                                                        <p className="text-slate-300">{cvData.personal_info.nationality}</p>
-                                                    </div>
-                                                )}
-
-                                                {/* Contact */}
-                                                {cvData.personal_info && (
-                                                    <>
-                                                        {cvData.personal_info.email && (
-                                                            <div>
-                                                                <span className="text-slate-500">Email:</span>
-                                                                <p className="text-slate-300">{cvData.personal_info.email}</p>
+                                            {/* Work History */}
+                                            {cvData.work_history && cvData.work_history.length > 0 && (
+                                                <div>
+                                                    <h5 className="text-lg font-semibold text-gray-900 mb-2">🏢 Work Experience</h5>
+                                                    <div className="space-y-3">
+                                                        {cvData.work_history.map((job: any, index: number) => (
+                                                            <div key={index} className="border-l-4 border-blue-500 pl-4 py-2 bg-white rounded">
+                                                                <div className="font-semibold text-gray-900">{job.job_title || 'Position not specified'}</div>
+                                                                <div className="text-gray-700">{job.company_name || 'Company not specified'}</div>
+                                                                <div className="text-sm text-gray-600">{job.start_date} - {job.end_date || 'Present'}</div>
                                                             </div>
-                                                        )}
-                                                        {cvData.personal_info.all_phones?.length > 0 && (
-                                                            <div>
-                                                                <span className="text-slate-500">Phone:</span>
-                                                                <p className="text-slate-300">{cvData.personal_info.all_phones.join(', ')}</p>
-                                                            </div>
-                                                        )}
-                                                        {cvData.personal_info.linkedin && (
-                                                            <div>
-                                                                <span className="text-slate-500">LinkedIn:</span>
-                                                                <a href={cvData.personal_info.linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline block truncate">
-                                                                    {cvData.personal_info.linkedin}
-                                                                </a>
-                                                            </div>
-                                                        )}
-                                                    </>
-                                                )}
-
-                                                {/* Education */}
-                                                {cvData.education?.length > 0 && (
-                                                    <div>
-                                                        <span className="text-slate-500">Education:</span>
-                                                        <div className="mt-1 space-y-1">
-                                                            {cvData.education.slice(0, 3).map((edu: any, i: number) => (
-                                                                <p key={i} className="text-slate-300 text-xs">
-                                                                    {edu.degree} {edu.major && `in ${edu.major}`}
-                                                                    {edu.institution && ` - ${edu.institution}`}
-                                                                    {edu.year && ` (${edu.year})`}
-                                                                </p>
-                                                            ))}
-                                                        </div>
+                                                        ))}
                                                     </div>
-                                                )}
+                                                </div>
+                                            )}
 
-                                                {/* Skills */}
-                                                {cvData.skills?.length > 0 && (
-                                                    <div>
-                                                        <span className="text-slate-500">Skills:</span>
-                                                        <div className="flex flex-wrap gap-1 mt-1">
-                                                            {cvData.skills.slice(0, 8).map((skill: any, i: number) => (
-                                                                <span key={i} className="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded text-xs">
-                                                                    {skill}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Work Experience */}
-                                                {cvData.work_history?.length > 0 && (
-                                                    <div>
-                                                        <span className="text-slate-500">Experience:</span>
-                                                        <div className="mt-1 space-y-2">
-                                                            {cvData.work_history.slice(0, 3).map((exp: any, i: number) => (
-                                                                <div key={i} className="text-xs">
-                                                                    <p className="text-slate-200 font-medium">{exp.job_title}</p>
-                                                                    <p className="text-slate-400">{exp.company}</p>
-                                                                    {exp.location && <p className="text-slate-500">{exp.location}</p>}
-                                                                    <p className="text-slate-500">{exp.start_date} - {exp.end_date} ({exp.duration})</p>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Certifications */}
-                                                {cvData.certifications?.length > 0 && (
-                                                    <div>
-                                                        <span className="text-slate-500">Certifications:</span>
-                                                        <div className="mt-1 space-y-1">
-                                                            {cvData.certifications.map((cert: any, i: number) => (
-                                                                <p key={i} className="text-slate-300 text-xs">• {cert}</p>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Professional Info */}
-                                                {cvData.professional_info && (
-                                                    <>
-                                                        {cvData.professional_info.years_experience && (
-                                                            <div>
-                                                                <span className="text-slate-500">Total Experience:</span>
-                                                                <p className="text-slate-300">{cvData.professional_info.years_experience} years</p>
-                                                            </div>
-                                                        )}
-                                                        {cvData.professional_info.gcc_experience === 'Yes' && (
-                                                            <div>
-                                                                <span className="text-slate-500">GCC Experience:</span>
-                                                                <p className="text-green-400">Yes</p>
-                                                            </div>
-                                                        )}
-                                                        {cvData.professional_info.willing_to_relocate === 'Yes' && (
-                                                            <div>
-                                                                <span className="text-slate-500">Relocation:</span>
-                                                                <p className="text-green-400">Open to relocate</p>
-                                                            </div>
-                                                        )}
-                                                    </>
-                                                )}
-
-                                                {/* Experience */}
-                                                {cvData.position_discipline?.years_of_experience && (
-                                                    <div>
-                                                        <span className="text-slate-500">Experience:</span>
-                                                        <p className="text-slate-300">{cvData.position_discipline.years_of_experience}</p>
-                                                    </div>
-                                                )}
-
-                                                {/* File Type */}
-                                                {cvData.file_type && (
-                                                    <div className="pt-2 border-t border-slate-700">
-                                                        <span className="px-2 py-0.5 bg-slate-700 text-slate-300 rounded text-xs">
-                                                            {cvData.file_type}
-                                                        </span>
-                                                        {cvData.detected_type && (
-                                                            <span className="ml-2 px-2 py-0.5 bg-cyan-500/20 text-cyan-400 rounded text-xs">
-                                                                {cvData.detected_type}
+                                            {/* Skills */}
+                                            {cvData.skills && cvData.skills.length > 0 && (
+                                                <div>
+                                                    <h5 className="text-lg font-semibold text-gray-900 mb-2">💡 Skills</h5>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {cvData.skills.map((skill: string, index: number) => (
+                                                            <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-lg text-sm font-medium">
+                                                                {skill}
                                                             </span>
-                                                        )}
+                                                        ))}
                                                     </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <p className="text-slate-500 text-sm">No CV data available</p>
-                                        )}
-                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Education */}
+                                            {cvData.education && cvData.education.length > 0 && (
+                                                <div>
+                                                    <h5 className="text-lg font-semibold text-gray-900 mb-2">🎓 Education</h5>
+                                                    <div className="space-y-2">
+                                                        {cvData.education.map((edu: any, index: number) => (
+                                                            <div key={index} className="flex items-start gap-2">
+                                                                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 shrink-0"></div>
+                                                                <div>
+                                                                    <div className="font-medium text-gray-900">{edu.degree} {edu.major && `in ${edu.major}`}</div>
+                                                                    <div className="text-sm text-gray-600">{edu.institution} {edu.year && `• ${edu.year}`}</div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
+                            )}
                         </div>
-                    ) : null}
-                </div>
-            )}
+                    )
+                })}
+            </div>
+
+            <style jsx>{`
+                @keyframes slideDown {
+                    from {
+                        opacity: 0;
+                        max-height: 0;
+                    }
+                    to {
+                        opacity: 1;
+                        max-height: 1000px;
+                    }
+                }
+                .animate-slideDown {
+                    animation: slideDown 0.3s ease-out;
+                }
+            `}</style>
         </div>
     )
 }
