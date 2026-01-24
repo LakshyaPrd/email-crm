@@ -59,9 +59,11 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
 export default function Home() {
     const [candidates, setCandidates] = useState<Candidate[]>([])
     const [isLoggedIn, setIsLoggedIn] = useState(false)
+    const [authChecking, setAuthChecking] = useState(true) // NEW: Track if we're checking auth
     const [user, setUser] = useState<{id: number, email: string, name: string} | null>(null)
     const [isLoading, setIsLoading] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
+
     
     // IMAP login states
     const [showIMAPLogin, setShowIMAPLogin] = useState(false)
@@ -319,6 +321,7 @@ export default function Home() {
                 localStorage.removeItem('recruiter_user')
             }
         }
+        setAuthChecking(false) // Done checking authentication
     }
 
     const handleLogin = async () => {
@@ -580,6 +583,18 @@ export default function Home() {
     useEffect(() => {
         checkLoginStatus()
     }, [])
+
+    // Show loading screen while checking authentication
+    if (authChecking) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-gray-100 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-600 text-lg">Loading...</p>
+                </div>
+            </div>
+        )
+    }
 
     if (!isLoggedIn) {
         const handleIMAPLogin = async () => {

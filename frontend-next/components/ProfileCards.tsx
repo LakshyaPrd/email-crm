@@ -35,15 +35,17 @@ interface ProfileCardsProps {
     onRefresh: () => void
 }
 
-type TabType = 'general' | 'cv' | 'transport' | 'skills' | 'experience'
+type TabType = 'notes' | 'tags' | 'email' | 'cv'
 
 export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProps) {
     const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null)
-    const [activeTab, setActiveTab] = useState<TabType>('general')
+    const [activeTab, setActiveTab] = useState<TabType>('notes')
     const [searchQuery, setSearchQuery] = useState('')
     const [filterType, setFilterType] = useState<'all' | 'new'>('all')
     const [sortBy, setSortBy] = useState('newest')
     const [notes, setNotes] = useState('')
+    const [tags, setTags] = useState<string[]>([])
+    const [newTag, setNewTag] = useState('')
 
     const getInitials = (name: string) => {
         return name
@@ -64,8 +66,21 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
 
     const handleCardClick = (candidate: Candidate) => {
         setSelectedCandidate(candidate)
-        setActiveTab('general')
+        setActiveTab('notes')
         setNotes(candidate.notes || '')
+        setTags(candidate.tags ? JSON.parse(candidate.tags) : [])
+    }
+
+    const addTag = () => {
+        const tag = newTag.trim()
+        if (tag && !tags.includes(tag)) {
+            setTags([...tags, tag])
+            setNewTag('')
+        }
+    }
+
+    const removeTag = (tagToRemove: string) => {
+        setTags(tags.filter(t => t !== tagToRemove))
     }
 
     const filteredCandidates = candidates.filter(candidate => {
@@ -90,55 +105,7 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
         <div className="flex h-full bg-gray-50">
             {/* LEFT PANEL - Candidate List */}
             <div className="w-96 bg-white border-r border-gray-200 flex flex-col">
-                {/* Search Bar */}
-                <div className="p-4 border-b border-gray-200">
-                    <div className="relative">
-                        <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Search"
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                        />
-                        <svg className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                    </div>
-                </div>
-
-                {/* Filters */}
-                <div className="p-4 border-b border-gray-200">
-                    <div className="flex gap-4 mb-4">
-                        <button
-                            onClick={() => setFilterType('all')}
-                            className={`pb-2 font-medium transition-colors ${
-                                filterType === 'all'
-                                    ? 'text-orange-600 border-b-2 border-orange-600'
-                                    : 'text-gray-600 hover:text-gray-900'
-                            }`}
-                        >
-                            All Candidates
-                        </button>
-                        <button
-                            onClick={() => setFilterType('new')}
-                            className={`pb-2 font-medium transition-colors ${
-                                filterType === 'new'
-                                    ? 'text-orange-600 border-b-2 border-orange-600'
-                                    : 'text-gray-600 hover:text-gray-900'
-                            }`}
-                        >
-                            New Applications
-                        </button>
-                    </div>
-
-                    {/* Sort By */}
-                    <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-600">Sort by: Date (Newest)</span>
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                    </div>
-                </div>
+                
 
                 {/* Candidates Header */}
                 <div className="px-4 py-3">
@@ -266,14 +233,34 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
                                     {/* Tabs */}
                                     <div className="flex gap-6 border-b border-gray-200 mb-6">
                                         <button
-                                            onClick={() => setActiveTab('general')}
+                                            onClick={() => setActiveTab('notes')}
                                             className={`pb-3 font-medium transition-colors ${
-                                                activeTab === 'general'
+                                                activeTab === 'notes'
                                                     ? 'text-orange-600 border-b-2 border-orange-600'
                                                     : 'text-gray-600 hover:text-gray-900'
                                             }`}
                                         >
-                                            General Info
+                                            📝 Notes
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('tags')}
+                                            className={`pb-3 font-medium transition-colors ${
+                                                activeTab === 'tags'
+                                                    ? 'text-orange-600 border-b-2 border-orange-600'
+                                                    : 'text-gray-600 hover:text-gray-900'
+                                            }`}
+                                        >
+                                            🏷️ Tags
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('email')}
+                                            className={`pb-3 font-medium transition-colors ${
+                                                activeTab === 'email'
+                                                    ? 'text-orange-600 border-b-2 border-orange-600'
+                                                    : 'text-gray-600 hover:text-gray-900'
+                                            }`}
+                                        >
+                                            📧 Email Info
                                         </button>
                                         <button
                                             onClick={() => setActiveTab('cv')}
@@ -283,222 +270,338 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
                                                     : 'text-gray-600 hover:text-gray-900'
                                             }`}
                                         >
-                                            CV
-                                        </button>
-                                        <button
-                                            onClick={() => setActiveTab('transport')}
-                                            className={`pb-3 font-medium transition-colors ${
-                                                activeTab === 'transport'
-                                                    ? 'text-orange-600 border-b-2 border-orange-600'
-                                                    : 'text-gray-600 hover:text-gray-900'
-                                            }`}
-                                        >
-                                            Transport Info
-                                        </button>
-                                        <button
-                                            onClick={() => setActiveTab('skills')}
-                                            className={`pb-3 font-medium transition-colors ${
-                                                activeTab === 'skills'
-                                                    ? 'text-orange-600 border-b-2 border-orange-600'
-                                                    : 'text-gray-600 hover:text-gray-900'
-                                            }`}
-                                        >
-                                            Skills
-                                        </button>
-                                        <button
-                                            onClick={() => setActiveTab('experience')}
-                                            className={`pb-3 font-medium transition-colors ${
-                                                activeTab === 'experience'
-                                                    ? 'text-orange-600 border-b-2 border-orange-600'
-                                                    : 'text-gray-600 hover:text-gray-900'
-                                            }`}
-                                        >
-                                            Experience
+                                            👤 CV Details
                                         </button>
                                     </div>
 
                                     {/* Tab Content */}
                                     <div>
-                                        {/* General Info Tab */}
-                                        {activeTab === 'general' && (
-                                            <div className="space-y-4">
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                                                        <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
-                                                            {personalInfo.email || selectedCandidate.email || 'Not provided'}
-                                                        </div>
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
-                                                        <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between">
-                                                            <span>{personalInfo.phone || 'Not provided'}</span>
-                                                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                            </svg>
-                                                        </div>
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-                                                        <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between">
-                                                            <span>{personalInfo.location || 'Not specified'}</span>
-                                                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                            </svg>
-                                                        </div>
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Expected Salary</label>
-                                                        <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between">
-                                                            <span>Not specified</span>
-                                                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                            </svg>
-                                                        </div>
-                                                    </div>
-                                                    <div className="col-span-2">
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Availability</label>
-                                                        <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between">
-                                                            <span>Available</span>
-                                                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                            </svg>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                        {/* Notes Tab */}
+                                        {activeTab === 'notes' && (
+                                            <div>
+                                                <h4 className="font-semibold text-gray-900 mb-3">Notes</h4>
+                                                <textarea
+                                                    value={notes}
+                                                    onChange={(e) => setNotes(e.target.value)}
+                                                    placeholder="Add your notes about this candidate..."
+                                                    className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+                                                />
+                                                <button className="mt-3 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm">
+                                                    Save Notes
+                                                </button>
+                                            </div>
+                                        )}
 
-                                                {/* Email Information */}
-                                                <div className="border-t border-gray-200 pt-4 mt-6">
-                                                    <h4 className="font-semibold text-gray-900 mb-3">Email Information</h4>
-                                                    <div className="grid grid-cols-2 gap-4 text-sm">
-                                                        <div>
-                                                            <span className="text-gray-600">Subject:</span>
-                                                            <p className="text-gray-900 mt-1">{selectedCandidate.email_subject || 'None'}</p>
-                                                        </div>
-                                                        <div>
-                                                            <span className="text-gray-600">From:</span>
-                                                            <p className="text-gray-900 mt-1">{selectedCandidate.email_from || 'None'}</p>
-                                                        </div>
-                                                        <div>
-                                                            <span className="text-gray-600">Date:</span>
-                                                            <p className="text-gray-900 mt-1">
-                                                                {selectedCandidate.email_date 
-                                                                    ? new Date(selectedCandidate.email_date).toLocaleDateString() 
-                                                                    : 'None'}
-                                                            </p>
-                                                        </div>
-                                                        <div>
-                                                            <span className="text-gray-600">Attachment:</span>
-                                                            <p className="text-gray-900 mt-1">{selectedCandidate.resume_filename || 'None'}</p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Notes */}
-                                                <div className="border-t border-gray-200 pt-4 mt-6">
-                                                    <h4 className="font-semibold text-gray-900 mb-3">Notes:</h4>
-                                                    <textarea
-                                                        value={notes}
-                                                        onChange={(e) => setNotes(e.target.value)}
-                                                        placeholder="Add your notes about this candidate..."
-                                                        className="w-full h-24 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+                                        {/* Tags Tab */}
+                                        {activeTab === 'tags' && (
+                                            <div>
+                                                <h4 className="font-semibold text-gray-900 mb-3">Tags</h4>
+                                                <div className="flex gap-2 mb-4">
+                                                    <input
+                                                        type="text"
+                                                        value={newTag}
+                                                        onChange={(e) => setNewTag(e.target.value)}
+                                                        onKeyPress={(e) => e.key === 'Enter' && addTag()}
+                                                        placeholder="Add a tag..."
+                                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
                                                     />
+                                                    <button
+                                                        onClick={addTag}
+                                                        className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm"
+                                                    >
+                                                        Add
+                                                    </button>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {tags.length > 0 ? (
+                                                        tags.map((tag, index) => (
+                                                            <span
+                                                                key={index}
+                                                                className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm flex items-center gap-2"
+                                                            >
+                                                                {tag}
+                                                                <button
+                                                                    onClick={() => removeTag(tag)}
+                                                                    className="text-orange-600 hover:text-orange-900 font-bold"
+                                                                >
+                                                                    ×
+                                                                </button>
+                                                            </span>
+                                                        ))
+                                                    ) : (
+                                                        <p className="text-gray-500 italic text-sm">No tags added yet</p>
+                                                    )}
                                                 </div>
                                             </div>
                                         )}
 
-                                        {/* CV Tab */}
+                                        {/* Email Info Tab - COMPREHENSIVE */}
+                                        {activeTab === 'email' && (
+                                            <div className="space-y-4">
+                                                <h4 className="font-semibold text-gray-900 mb-3">Email Information</h4>
+                                                
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="text-sm font-medium text-gray-600">Subject</label>
+                                                        <p className="text-gray-900 mt-1">{selectedCandidate.email_subject || 'None'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-sm font-medium text-gray-600">From</label>
+                                                        <p className="text-gray-900 mt-1">{selectedCandidate.email_from || selectedCandidate.email || 'None'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-sm font-medium text-gray-600">To</label>
+                                                        <p className="text-gray-900 mt-1">{selectedCandidate.email_to || 'None'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-sm font-medium text-gray-600">CC</label>
+                                                        <p className="text-gray-900 mt-1">{selectedCandidate.email_cc || 'None'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-sm font-medium text-gray-600">Date</label>
+                                                        <p className="text-gray-900 mt-1">
+                                                            {selectedCandidate.email_date ? new Date(selectedCandidate.email_date).toLocaleString() : 'None'}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-sm font-medium text-gray-600">Attachments</label>
+                                                        <p className="text-gray-900 mt-1">{selectedCandidate.resume_filename || 'None'}</p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Email Body */}
+                                                <div>
+                                                    <label className="text-sm font-medium text-gray-600 mb-2 block">Email Body</label>
+                                                    <div className="bg-white border border-gray-200 rounded-lg p-4 max-h-64 overflow-y-auto">
+                                                        <p className="text-gray-700 text-sm whitespace-pre-wrap">
+                                                            {selectedCandidate.email_body || 'No email body available'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Email Signature */}
+                                                {selectedCandidate.email_signature && (
+                                                    <div>
+                                                        <label className="text-sm font-medium text-gray-600 mb-2 block">Signature</label>
+                                                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                                            <p className="text-gray-700 text-sm whitespace-pre-wrap">{selectedCandidate.email_signature}</p>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Extracted Information */}
+                                                {(selectedCandidate.extracted_phones || selectedCandidate.extracted_emails || selectedCandidate.extracted_links) && (
+                                                    <div className="border-t border-gray-300 pt-4">
+                                                        <h5 className="font-semibold text-gray-900 mb-3">Extracted Information</h5>
+                                                        <div className="space-y-3">
+                                                            {/* Extracted Phone Numbers */}
+                                                            {selectedCandidate.extracted_phones && (
+                                                                <div>
+                                                                    <label className="text-sm font-medium text-gray-600 mb-1.5 block">📞 Phone Numbers</label>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {selectedCandidate.extracted_phones.split(',').map((phone: string, index: number) => (
+                                                                            <a
+                                                                                key={index}
+                                                                                href={`tel:${phone.trim()}`}
+                                                                                className="px-3 py-1.5 bg-green-50 text-green-800 rounded-lg text-sm font-medium border border-green-200 hover:bg-green-100 transition-colors"
+                                                                            >
+                                                                                {phone.trim()}
+                                                                            </a>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            
+                                                            {/* Extracted Emails */}
+                                                            {selectedCandidate.extracted_emails && (
+                                                                <div>
+                                                                    <label className="text-sm font-medium text-gray-600 mb-1.5 block">📧 Email Addresses</label>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {selectedCandidate.extracted_emails.split(',').map((email: string, index: number) => (
+                                                                            <a
+                                                                                key={index}
+                                                                                href={`mailto:${email.trim()}`}
+                                                                                className="px-3 py-1.5 bg-blue-50 text-blue-800 rounded-lg text-sm font-medium border border-blue-200 hover:bg-blue-100 transition-colors"
+                                                                            >
+                                                                                {email.trim()}
+                                                                            </a>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            
+                                                            {/* Extracted Links */}
+                                                            {selectedCandidate.extracted_links && (
+                                                                <div>
+                                                                    <label className="text-sm font-medium text-gray-600 mb-1.5 block">🔗 Links</label>
+                                                                    <div className="flex flex-col gap-2">
+                                                                        {selectedCandidate.extracted_links.split(',').map((link: string, index: number) => (
+                                                                            <a
+                                                                                key={index}
+                                                                                href={link.trim()}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="px-3 py-1.5 bg-purple-50 text-purple-800 rounded-lg text-sm font-medium border border-purple-200 hover:bg-purple-100 transition-colors break-all"
+                                                                            >
+                                                                                {link.trim()}
+                                                                            </a>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* CV Details Tab - COMPREHENSIVE */}
                                         {activeTab === 'cv' && (
                                             <div className="space-y-6">
+                                                <h4 className="font-semibold text-gray-900 mb-3">CV Information</h4>
+
                                                 {/* Personal Information */}
-                                                <div>
-                                                    <h4 className="font-semibold text-gray-900 mb-3">Personal Information</h4>
-                                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                                                    <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                        <span>👤</span> Personal Information
+                                                    </h5>
+                                                    <div className="grid grid-cols-2 gap-3 text-sm">
                                                         <div>
-                                                            <span className="text-gray-600">Full Name:</span>
-                                                            <p className="text-gray-900 mt-1 font-medium">{personalInfo.name || 'None'}</p>
+                                                            <span className="text-gray-600">Name:</span>
+                                                            <span className="ml-2 text-gray-900 font-medium">{personalInfo.name || 'None'}</span>
                                                         </div>
                                                         <div>
                                                             <span className="text-gray-600">Email:</span>
-                                                            <p className="text-gray-900 mt-1 font-medium">{personalInfo.email || 'None'}</p>
+                                                            <span className="ml-2 text-gray-900 font-medium">{personalInfo.email || selectedCandidate.email || 'None'}</span>
                                                         </div>
                                                         <div>
                                                             <span className="text-gray-600">Phone:</span>
-                                                            <p className="text-gray-900 mt-1 font-medium">{personalInfo.phone || 'None'}</p>
-                                                        </div>
-                                                        <div>
-                                                            <span className="text-gray-600">Date of Birth:</span>
-                                                            <p className="text-gray-900 mt-1 font-medium">{personalInfo.dob || 'None'}</p>
+                                                            <span className="ml-2 text-gray-900 font-medium">{personalInfo.phone || 'None'}</span>
                                                         </div>
                                                         <div>
                                                             <span className="text-gray-600">Location:</span>
-                                                            <p className="text-gray-900 mt-1 font-medium">{personalInfo.location || 'None'}</p>
+                                                            <span className="ml-2 text-gray-900 font-medium">{personalInfo.location || 'None'}</span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-gray-600">Date of Birth:</span>
+                                                            <span className="ml-2 text-gray-900 font-medium">{personalInfo.dob || 'None'}</span>
                                                         </div>
                                                         <div>
                                                             <span className="text-gray-600">LinkedIn:</span>
-                                                            {personalInfo.linkedin ? (
-                                                                <a href={personalInfo.linkedin.startsWith('http') ? personalInfo.linkedin : `https://${personalInfo.linkedin}`} 
-                                                                   target="_blank" rel="noopener noreferrer"
-                                                                   className="text-orange-600 mt-1 font-medium hover:underline block">
-                                                                    {personalInfo.linkedin}
-                                                                </a>
-                                                            ) : (
-                                                                <p className="text-gray-900 mt-1 font-medium">None</p>
-                                                            )}
+                                                            <span className="ml-2 text-orange-600 font-medium">
+                                                                {personalInfo.linkedin ? (
+                                                                    <a href={personalInfo.linkedin.startsWith('http') ? personalInfo.linkedin : `https://${personalInfo.linkedin}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                                                                        {personalInfo.linkedin}
+                                                                    </a>
+                                                                ) : 'None'}
+                                                            </span>
                                                         </div>
                                                     </div>
                                                 </div>
 
                                                 {/* Professional Information */}
-                                                <div className="border-t border-gray-200 pt-4">
-                                                    <h4 className="font-semibold text-gray-900 mb-3">Professional Information</h4>
-                                                    <div className="grid grid-cols-3 gap-4 text-sm">
+                                                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                                                    <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                        <span>💼</span> Professional Information
+                                                    </h5>
+                                                    <div className="grid grid-cols-3 gap-3 text-sm">
                                                         <div>
                                                             <span className="text-gray-600">Years of Experience:</span>
-                                                            <p className="text-gray-900 mt-1 font-medium">{professionalInfo.years_experience || 'None'}</p>
+                                                            <span className="ml-2 text-gray-900 font-medium">{professionalInfo.years_experience || 'None'}</span>
                                                         </div>
                                                         <div>
                                                             <span className="text-gray-600">GCC Experience:</span>
-                                                            <p className="text-gray-900 mt-1 font-medium">{professionalInfo.gcc_experience || 'None'}</p>
+                                                            <span className="ml-2 text-gray-900 font-medium">{professionalInfo.gcc_experience || 'None'}</span>
                                                         </div>
                                                         <div>
                                                             <span className="text-gray-600">Willing to Relocate:</span>
-                                                            <p className="text-gray-900 mt-1 font-medium">{professionalInfo.willing_to_relocate || 'None'}</p>
+                                                            <span className="ml-2 text-gray-900 font-medium">{professionalInfo.willing_to_relocate || 'None'}</span>
                                                         </div>
                                                     </div>
                                                 </div>
 
                                                 {/* Education */}
-                                                {cvData.education && cvData.education.length > 0 && (
-                                                    <div className="border-t border-gray-200 pt-4">
-                                                        <h4 className="font-semibold text-gray-900 mb-3">Education</h4>
+                                                {cvData.education && cvData.education.length > 0 ? (
+                                                    <div>
+                                                        <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                            <span>🎓</span> Education
+                                                        </h5>
                                                         <div className="space-y-3">
                                                             {cvData.education.map((edu: any, index: number) => (
-                                                                <div key={index} className="p-4 bg-gray-50 rounded-lg">
-                                                                    <div className="font-medium text-gray-900">
-                                                                        {edu.degree} {edu.major && `in ${edu.major}`}
+                                                                <div key={index} className="bg-white rounded-lg border border-gray-200 p-4">
+                                                                    <div className="font-semibold text-gray-900 mb-1">
+                                                                        {edu.degree || 'Degree not specified'} {edu.major && `in ${edu.major}`}
                                                                     </div>
-                                                                    <div className="text-sm text-gray-600 mt-1">{edu.institution}</div>
-                                                                    <div className="flex gap-4 text-sm text-gray-600 mt-1">
-                                                                        {edu.year && <span>Year: {edu.year}</span>}
-                                                                        {edu.cgpa && <span>CGPA: {edu.cgpa}</span>}
+                                                                    <div className="text-gray-700 mb-1">{edu.institution || 'Institution not specified'}</div>
+                                                                    <div className="flex gap-4 text-sm text-gray-600">
+                                                                        {edu.year && <span>📅 {edu.year}</span>}
+                                                                        {edu.cgpa && <span>📊 CGPA: {edu.cgpa}</span>}
                                                                     </div>
                                                                 </div>
                                                             ))}
                                                         </div>
                                                     </div>
+                                                ) : (
+                                                    <div className="text-gray-500 italic text-sm">No education information available</div>
+                                                )}
+
+                                                {/* Work History */}
+                                                {cvData.work_history && cvData.work_history.length > 0 ? (
+                                                    <div>
+                                                        <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                            <span>🏢</span> Work Experience
+                                                        </h5>
+                                                        <div className="space-y-3">
+                                                            {cvData.work_history.map((job: any, index: number) => (
+                                                                <div key={index} className="bg-white rounded-lg border border-gray-200 border-l-4 border-l-orange-500 p-4">
+                                                                    <div className="font-semibold text-gray-900 mb-1">
+                                                                        {job.job_title || 'Position not specified'}
+                                                                    </div>
+                                                                    <div className="text-gray-700 mb-2">{job.company || job.company_name || 'Company not specified'}</div>
+                                                                    <div className="flex flex-wrap gap-3 text-sm text-gray-600">
+                                                                        <span>📅 {job.start_date || 'Start date not specified'} - {job.end_date || 'Present'}</span>
+                                                                        {job.duration && <span>⏱️ {job.duration}</span>}
+                                                                        {job.location && <span>📍 {job.location}</span>}
+                                                                    </div>
+                                                                    {job.responsibilities && (
+                                                                        <p className="text-sm text-gray-600 mt-2">{job.responsibilities}</p>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-gray-500 italic text-sm">No work history available</div>
+                                                )}
+
+                                                {/* Skills */}
+                                                {cvData.skills && cvData.skills.length > 0 ? (
+                                                    <div>
+                                                        <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                            <span>💡</span> Skills
+                                                        </h5>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {cvData.skills.map((skill: string, index: number) => (
+                                                                <span key={index} className="px-3 py-1.5 bg-orange-100 text-orange-800 rounded-lg text-sm font-medium">
+                                                                    {skill}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-gray-500 italic text-sm">No skills listed</div>
                                                 )}
 
                                                 {/* Certifications */}
-                                                {cvData.certifications && cvData.certifications.length > 0 && (
-                                                    <div className="border-t border-gray-200 pt-4">
-                                                        <h4 className="font-semibold text-gray-900 mb-3">Certifications</h4>
+                                                {cvData.certifications && cvData.certifications.length > 0 ? (
+                                                    <div>
+                                                        <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                            <span>📜</span> Certifications
+                                                        </h5>
                                                         <div className="space-y-2">
                                                             {cvData.certifications.map((cert: any, index: number) => (
-                                                                <div key={index} className="flex items-start gap-2">
-                                                                    <svg className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                                                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                                                    </svg>
+                                                                <div key={index} className="flex items-start gap-2 bg-white rounded-lg border border-gray-200 p-3">
+                                                                    <span className="text-orange-600">✓</span>
                                                                     <span className="text-gray-900">
                                                                         {typeof cert === 'string' ? cert : cert.name || cert.title || 'Certification'}
                                                                     </span>
@@ -506,72 +609,18 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
                                                             ))}
                                                         </div>
                                                     </div>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {/* Skills Tab */}
-                                        {activeTab === 'skills' && (
-                                            <div>
-                                                <h4 className="font-semibold text-gray-900 mb-4">Skills</h4>
-                                                {cvData.skills && cvData.skills.length > 0 ? (
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {cvData.skills.map((skill: string, index: number) => (
-                                                            <span key={index} className="px-4 py-2 bg-orange-50 text-orange-700 rounded-lg text-sm font-medium border border-orange-200">
-                                                                {skill}
-                                                            </span>
-                                                        ))}
-                                                    </div>
                                                 ) : (
-                                                    <p className="text-gray-500 italic">No skills listed</p>
+                                                    <div className="text-gray-500 italic text-sm">No certifications listed</div>
                                                 )}
-                                            </div>
-                                        )}
 
-                                        {/* Experience Tab */}
-                                        {activeTab === 'experience' && (
-                                            <div>
-                                                <h4 className="font-semibold text-gray-900 mb-4">Work Experience</h4>
-                                                {cvData.work_history && cvData.work_history.length > 0 ? (
-                                                    <div className="space-y-4">
-                                                        {cvData.work_history.map((job: any, index: number) => (
-                                                            <div key={index} className="p-4 bg-gray-50 rounded-lg border-l-4 border-orange-500">
-                                                                <div className="font-semibold text-gray-900 mb-1">
-                                                                    {job.job_title || 'Position not specified'}
-                                                                </div>
-                                                                <div className="text-gray-700 mb-2">{job.company || job.company_name || 'Company not specified'}</div>
-                                                                <div className="flex flex-wrap gap-3 text-sm text-gray-600">
-                                                                    <span>{job.start_date || 'Start date not specified'} - {job.end_date || 'Present'}</span>
-                                                                    {job.duration && <span>• {job.duration}</span>}
-                                                                    {job.location && <span>• {job.location}</span>}
-                                                                </div>
-                                                            </div>
-                                                        ))}
+                                                {/* No CV Data Message */}
+                                                {!cvData.education && !cvData.work_history && !cvData.skills && !cvData.certifications && (
+                                                    <div className="text-center py-8">
+                                                        <div className="text-5xl mb-3">📄</div>
+                                                        <h4 className="text-lg font-semibold text-gray-600 mb-2">No CV Data Available</h4>
+                                                        <p className="text-gray-500 text-sm">CV information could not be extracted from this candidate's resume.</p>
                                                     </div>
-                                                ) : (
-                                                    <p className="text-gray-500 italic">No work history available</p>
                                                 )}
-                                            </div>
-                                        )}
-
-                                        {/* Transport Info Tab */}
-                                        {activeTab === 'transport' && (
-                                            <div>
-                                                <h4 className="font-semibold text-gray-900 mb-4">Transport Information</h4>
-                                                <div className="space-y-4">
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Has Own Vehicle</label>
-                                                        <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
-                                                            Not specified
-                                                        </div>
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">License Type</label>
-                                                        <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
-                                                            Not specified
-                                                        </div>
-                                                    </div>
-                                                </div>
                                             </div>
                                         )}
                                     </div>
