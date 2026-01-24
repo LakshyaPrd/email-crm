@@ -202,16 +202,16 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
     return (
         <div className="flex h-[calc(100vh-280px)] min-h-[500px]">
             {/* Left Panel - Candidate Cards List */}
-            <div className={`${selectedCandidate ? 'w-1/3' : 'w-full'} border-r border-slate-700 overflow-y-auto pr-2 transition-all`}>
+            <div className={`${selectedCandidate ? 'w-1/3' : 'w-full'} border-r border-gray-200 overflow-y-auto pr-2 transition-all`}>
                 {/* Header */}
-                <div className="sticky top-0 bg-slate-900/95 backdrop-blur z-10 p-3 mb-3 rounded-xl border border-slate-700">
+                <div className="sticky top-0 bg-gradient-to-r from-slate-800 to-slate-700 backdrop-blur z-10 p-3 mb-3 rounded-xl">
                     <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-400">
+                        <span className="text-sm text-white font-medium">
                             {candidates.length} candidate{candidates.length !== 1 ? 's' : ''}
                         </span>
                         <button
                             onClick={onRefresh}
-                            className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-slate-700 text-slate-300 hover:bg-slate-600"
+                            className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700"
                         >
                             🔄 Refresh
                         </button>

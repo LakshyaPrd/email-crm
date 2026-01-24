@@ -97,16 +97,26 @@ export default function CandidateProfilePage() {
                 {/* Profile Header Card */}
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 mb-6">
                     <div className="flex items-start gap-6">
-                        {/* Profile Photo */}
-                        <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-3xl font-bold shrink-0">
-                            {(personalInfo.name || candidate.name || 'U')[0].toUpperCase()}
+                        {/* Profile Photo with Status */}
+                        <div className="relative">
+                            <div className="w-32 h-32 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center text-white text-4xl font-bold shrink-0 shadow-lg">
+                                {(personalInfo.name || candidate.name || 'U')[0].toUpperCase()}
+                            </div>
+                            {/* Online Status Indicator */}
+                            <div className="absolute bottom-2 right-2 w-5 h-5 bg-green-500 border-4 border-white rounded-full"></div>
                         </div>
                         
                         {/* Basic Info */}
                         <div className="flex-1">
-                            <h1 className="text-3xl font-bold text-gray-900 mb-1">
-                                {personalInfo.name || candidate.name || 'Unknown Candidate'}
-                            </h1>
+                            <div className="flex items-center gap-2 mb-1">
+                                <h1 className="text-3xl font-bold text-gray-900">
+                                    {personalInfo.name || candidate.name || 'Unknown Candidate'}
+                                </h1>
+                                {/* Verification Badge */}
+                                <svg className="w-6 h-6 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                            </div>
                             <p className="text-lg text-gray-600 mb-4">
                                 {professionalInfo.current_position || 'Position not specified'}
                             </p>
@@ -135,39 +145,51 @@ export default function CandidateProfilePage() {
                         </div>
 
                         {/* Action Buttons */}
-                        <div className="flex gap-2">
-                            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                                Contact
+                        <div className="flex flex-col gap-2">
+                            <button className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                                Hire Me
                             </button>
-                            <button className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">
-                                ⭐ Follow
+                            <button className="px-6 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-colors border border-gray-300 font-medium">
+                                Follow
                             </button>
                         </div>
                     </div>
 
                     {/* Stats Row */}
-                    <div className="grid grid-cols-4 gap-4 mt-6 pt-6 border-t border-gray-200">
-                        <div className="text-center">
-                            <div className="text-2xl font-bold text-gray-900">
-                                {professionalInfo.years_experience || 'N/A'}
+                    <div className="grid grid-cols-4 gap-6 mt-8">
+                        <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-4 border border-emerald-100">
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-emerald-600 text-xl">📊</span>
+                                <span className="text-emerald-600 text-3xl font-bold">
+                                    {professionalInfo.years_experience || 'N/A'}
+                                </span>
                             </div>
                             <div className="text-sm text-gray-600">Years Experience</div>
                         </div>
-                        <div className="text-center">
-                            <div className="text-2xl font-bold text-gray-900">
-                                {professionalInfo.gcc_experience || 'N/A'}
+                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-blue-600 text-xl">🌍</span>
+                                <span className="text-blue-600 text-3xl font-bold">
+                                    {professionalInfo.gcc_experience || 'N/A'}
+                                </span>
                             </div>
                             <div className="text-sm text-gray-600">GCC Experience</div>
                         </div>
-                        <div className="text-center">
-                            <div className="text-2xl font-bold text-gray-900">
-                                {cvData.skills?.length || 0}
+                        <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100">
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-purple-600 text-xl">💡</span>
+                                <span className="text-purple-600 text-3xl font-bold">
+                                    {cvData.skills?.length || 0}
+                                </span>
                             </div>
                             <div className="text-sm text-gray-600">Skills</div>
                         </div>
-                        <div className="text-center">
-                            <div className="text-2xl font-bold text-gray-900">
-                                {cvData.work_history?.length || 0}
+                        <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-4 border border-amber-100">
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-amber-600 text-xl">🏢</span>
+                                <span className="text-amber-600 text-3xl font-bold">
+                                    {cvData.work_history?.length || 0}
+                                </span>
                             </div>
                             <div className="text-sm text-gray-600">Work History</div>
                         </div>
