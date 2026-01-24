@@ -227,10 +227,10 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
                             <div
                                 key={candidateId}
                                 onClick={() => handleCardClick(candidate)}
-                                className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                                className={`p-4 rounded-xl border cursor-pointer transition-all shadow-sm hover:shadow-md ${
                                     isActive
-                                        ? 'border-blue-500 bg-blue-500/10'
-                                        : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                                        ? 'border-blue-500 bg-blue-50'
+                                        : 'border-gray-200 bg-white hover:border-blue-300'
                                 }`}
                             >
                                 <div className="flex items-start gap-3">
@@ -242,21 +242,21 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
                                     <div className="flex-1 min-w-0">
                                         {/* Unique ID Badge */}
                                         <div className="flex items-center gap-2 text-xs mb-1">
-                                            <span className="text-slate-500 font-mono">CV ID: {candidate.unique_id || 'N/A'}</span>
+                                            <span className="text-gray-500 font-mono">CV ID: {candidate.unique_id || 'N/A'}</span>
                                         </div>
 
                                         {/* Name */}
-                                        <h3 className="font-semibold text-white truncate">
+                                        <h3 className="font-semibold text-gray-900 truncate">
                                             {candidate.name || 'Unknown'}
                                         </h3>
 
                                         {/* Subject as Role */}
-                                        <p className="text-sm text-slate-400 truncate">
+                                        <p className="text-sm text-gray-600 truncate">
                                             {candidate.email_subject || 'No subject'}
                                         </p>
 
                                         {/* Meta info */}
-                                        <div className="flex items-center gap-2 mt-2 text-xs text-slate-500 flex-wrap">
+                                        <div className="flex items-center gap-2 mt-2 text-xs text-gray-500 flex-wrap">
                                             {candidate.resume_filename && (
                                                 <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded">
                                                     📎 CV

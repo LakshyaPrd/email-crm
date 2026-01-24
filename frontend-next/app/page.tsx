@@ -612,8 +612,8 @@ export default function Home() {
         }
 
         return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-4">
-                <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-8 max-w-md w-full">
+            <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-gray-100 flex items-center justify-center p-4">
+                <div className="bg-white border border-gray-200 shadow-xl rounded-2xl p-8 max-w-md w-full">
                     <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
                         <span className="text-4xl">📧</span>
                     </div>
@@ -665,15 +665,15 @@ export default function Home() {
                             </div>
                             
                             <div className="flex items-center gap-3 my-5">
-                                <div className="flex-1 h-px bg-slate-700"></div>
-                                <span className="text-xs text-slate-500">Advanced</span>
-                                <div className="flex-1 h-px bg-slate-700"></div>
+                                <div className="flex-1 h-px bg-gray-300"></div>
+                                <span className="text-xs text-gray-500">Advanced</span>
+                                <div className="flex-1 h-px bg-gray-300"></div>
                             </div>
                             
                             {/* Other Email (IMAP) - Less Prominent */}
                             <button
                                 onClick={() => { setShowIMAPLogin(true); setImapProvider('gmail'); }}
-                                className="w-full py-2.5 bg-slate-700/30 hover:bg-slate-700/50 text-slate-400 hover:text-slate-300 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 border border-slate-700/50"
+                                className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-900 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 border border-gray-300"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -681,7 +681,7 @@ export default function Home() {
                                 </svg>
                                 <span>Use IMAP (Outlook, Yahoo, Other)</span>
                             </button>
-                            <p className="text-xs text-slate-500 text-center mt-2">Requires app password</p>
+                            <p className="text-xs text-gray-500 text-center mt-2">Requires app password</p>
                         </>
                     ) : (
                         <>
@@ -795,19 +795,19 @@ export default function Home() {
     }
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-slate-950 via-slate-900 to-slate-950">
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-gray-100">
             {/* Header */}
-            <header className="bg-slate-900/80 border-b border-slate-800 sticky top-0 z-50 backdrop-blur-xl">
+            <header className="bg-white/80 border-b border-gray-200 sticky top-0 z-50 backdrop-blur-xl shadow-sm">
                 <div className="px-4 py-3">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="w-9 h-9 bg-linear-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
                                 <span className="text-lg">📧</span>
                             </div>
-                            <h1 className="text-lg font-bold text-white">CV Scanner</h1>
+                            <h1 className="text-lg font-bold text-gray-900">CV Scanner</h1>
                         </div>
                         <div className="flex items-center gap-3">
-                            <span className="text-sm text-slate-400">{user?.name}</span>
+                            <span className="text-sm text-gray-600">{user?.name}</span>
                             <div className="w-8 h-8 bg-linear-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
                                 {user?.name?.charAt(0).toUpperCase() || 'U'}
                             </div>
@@ -829,13 +829,13 @@ export default function Home() {
                                     // Call backend reset
                                     fetch(`${API_URL}/reset-session`, { method: 'POST' })
                                 }}
-                                className="px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-lg text-sm border border-amber-500/30"
+                                className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-sm border border-amber-200"
                             >
                                 Reset
                             </button>
                             <button
                                 onClick={handleLogout}
-                                className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg text-sm border border-red-500/30"
+                                className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-sm border border-red-200"
                             >
                                 Logout
                             </button>
@@ -962,12 +962,12 @@ export default function Home() {
                     {/* Results Header */}
                     <div className="mb-4 flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <span className="text-emerald-400 text-lg">📋</span>
+                            <span className="text-blue-600 text-lg">📋</span>
                             <div>
-                                <h2 className="text-lg font-semibold text-white">
+                                <h2 className="text-lg font-semibold text-gray-900">
                                     {activeTab === 'search' ? 'All Candidates' : 'Scanned Candidates'}
                                 </h2>
-                                <p className="text-xs text-slate-400">
+                                <p className="text-xs text-gray-600">
                                     {activeTab === 'search' 
                                         ? `${candidates.length} candidates in database${searchQuery ? ` • Filtered by "${searchQuery}"` : ''}`
                                         : `${scannedCandidates.length} from last scan`
@@ -978,7 +978,7 @@ export default function Home() {
                     </div>
 
                     {/* Profile Cards */}
-                    <div className="bg-slate-800/30 border border-slate-700 rounded-xl h-[calc(100%-60px)] overflow-hidden">
+                    <div className="bg-white border border-gray-200 shadow-sm rounded-xl h-[calc(100%-60px)] overflow-hidden">
                         <ProfileCards 
                             candidates={activeTab === 'search' ? candidates : scannedCandidates}
                             onRefresh={() => activeTab === 'search' ? fetchCandidates() : null}
