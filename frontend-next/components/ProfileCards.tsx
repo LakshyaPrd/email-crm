@@ -35,16 +35,15 @@ interface ProfileCardsProps {
     onRefresh: () => void
 }
 
-type TabType = 'notes' | 'tags' | 'email' | 'cv'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+type TabType = 'general' | 'cv' | 'transport' | 'skills' | 'experience'
 
 export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProps) {
     const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null)
-    const [activeTab, setActiveTab] = useState<TabType>('notes')
+    const [activeTab, setActiveTab] = useState<TabType>('general')
+    const [searchQuery, setSearchQuery] = useState('')
+    const [filterType, setFilterType] = useState<'all' | 'new'>('all')
+    const [sortBy, setSortBy] = useState('newest')
     const [notes, setNotes] = useState('')
-    const [tags, setTags] = useState<string[]>([])
-    const [newTag, setNewTag] = useState('')
 
     const getInitials = (name: string) => {
         return name
@@ -55,28 +54,29 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
             .slice(0, 2)
     }
 
+    const isNewCandidate = (candidate: Candidate) => {
+        if (!candidate.created_at) return false
+        const createdDate = new Date(candidate.created_at)
+        const now = new Date()
+        const diffInHours = (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60)
+        return diffInHours < 24 // Consider candidates from last 24 hours as "NEW"
+    }
+
     const handleCardClick = (candidate: Candidate) => {
         setSelectedCandidate(candidate)
-        setActiveTab('notes')
+        setActiveTab('general')
         setNotes(candidate.notes || '')
-        setTags(candidate.tags ? JSON.parse(candidate.tags) : [])
     }
 
-    const addTag = () => {
-        const tag = newTag.trim()
-        if (tag && !tags.includes(tag)) {
-            setTags([...tags, tag])
-            setNewTag('')
-        }
-    }
-
-    const removeTag = (tagToRemove: string) => {
-        setTags(tags.filter(t => t !== tagToRemove))
-    }
+    const filteredCandidates = candidates.filter(candidate => {
+        const matchesSearch = candidate.name.toLowerCase().includes(searchQuery.toLowerCase())
+        const matchesFilter = filterType === 'all' || (filterType === 'new' && isNewCandidate(candidate))
+        return matchesSearch && matchesFilter
+    })
 
     if (candidates.length === 0) {
         return (
-            <div className="flex items-center justify-center h-full">
+            <div className="flex items-center justify-center h-full bg-gray-50">
                 <div className="text-center">
                     <div className="text-6xl mb-4">📭</div>
                     <h3 className="text-xl font-semibold text-gray-600 mb-2">No Candidates Found</h3>
@@ -87,576 +87,418 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
     }
 
     return (
-        <div className="flex h-full">
+        <div className="flex h-full bg-gray-50">
             {/* LEFT PANEL - Candidate List */}
-            <div className={`${selectedCandidate ? 'w-1/3' : 'w-full'} border-r border-gray-200 overflow-y-auto pr-2 transition-all`}>
-                {/* Header */}
-                <div className="sticky top-0 bg-gradient-to-r from-slate-800 to-slate-700 backdrop-blur z-10 p-3 mb-3 rounded-xl">
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm text-white font-medium">
-                            {candidates.length} candidate{candidates.length !== 1 ? 's' : ''}
-                        </span>
-                        <button
-                            onClick={onRefresh}
-                            className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700"
-                        >
-                            🔄 Refresh
-                        </button>
+            <div className="w-96 bg-white border-r border-gray-200 flex flex-col">
+                {/* Search Bar */}
+                <div className="p-4 border-b border-gray-200">
+                    <div className="relative">
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search"
+                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        />
+                        <svg className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
                     </div>
                 </div>
 
-                {/* Candidate Cards */}
-                <div className="space-y-3">
-                    {candidates.map((candidate) => {
-                        const candidateId = candidate.id || 0
-                        const isActive = selectedCandidate?.id === candidateId
+                {/* Filters */}
+                <div className="p-4 border-b border-gray-200">
+                    <div className="flex gap-4 mb-4">
+                        <button
+                            onClick={() => setFilterType('all')}
+                            className={`pb-2 font-medium transition-colors ${
+                                filterType === 'all'
+                                    ? 'text-orange-600 border-b-2 border-orange-600'
+                                    : 'text-gray-600 hover:text-gray-900'
+                            }`}
+                        >
+                            All Candidates
+                        </button>
+                        <button
+                            onClick={() => setFilterType('new')}
+                            className={`pb-2 font-medium transition-colors ${
+                                filterType === 'new'
+                                    ? 'text-orange-600 border-b-2 border-orange-600'
+                                    : 'text-gray-600 hover:text-gray-900'
+                            }`}
+                        >
+                            New Applications
+                        </button>
+                    </div>
 
-                        return (
-                            <div
-                                key={candidateId}
-                                onClick={() => handleCardClick(candidate)}
-                                className={`p-4 rounded-xl border cursor-pointer transition-all shadow-sm hover:shadow-md ${
-                                    isActive
-                                        ? 'border-blue-500 bg-blue-50'
-                                        : 'border-gray-200 bg-white hover:border-blue-300'
-                                }`}
-                            >
-                                <div className="flex items-start gap-3">
+                    {/* Sort By */}
+                    <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">Sort by: Date (Newest)</span>
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                    </div>
+                </div>
+
+                {/* Candidates Header */}
+                <div className="px-4 py-3">
+                    <h3 className="text-lg font-bold text-gray-900">Candidates</h3>
+                </div>
+
+                {/* Candidate Cards */}
+                <div className="flex-1 overflow-y-auto px-4">
+                    <div className="space-y-3 pb-4">
+                        {filteredCandidates.map((candidate) => {
+                            const candidateId = candidate.id || 0
+                            const isActive = selectedCandidate?.id === candidateId
+                            const isNew = isNewCandidate(candidate)
+
+                            return (
+                                <div
+                                    key={candidateId}
+                                    onClick={() => handleCardClick(candidate)}
+                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all border ${
+                                        isActive
+                                            ? 'bg-orange-50 border-orange-200'
+                                            : 'bg-white border-gray-200 hover:border-orange-300 hover:shadow-sm'
+                                    }`}
+                                >
                                     {/* Avatar */}
-                                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                                    <div className="w-12 h-12 rounded-full bg-white border-2 border-orange-500 flex items-center justify-center text-orange-600 font-bold flex-shrink-0">
                                         {getInitials(candidate.name || 'UN')}
                                     </div>
 
+                                    {/* Info */}
                                     <div className="flex-1 min-w-0">
-                                        {/* Unique ID Badge */}
-                                        <div className="flex items-center gap-2 text-xs mb-1">
-                                            <span className="text-gray-500 font-mono">CV ID: {candidate.unique_id || 'N/A'}</span>
-                                        </div>
-
-                                        {/* Name */}
-                                        <h3 className="font-semibold text-gray-900 truncate">
+                                        <h4 className="font-semibold text-gray-900 truncate">
                                             {candidate.name || 'Unknown'}
-                                        </h3>
-
-                                        {/* Subject as Role */}
+                                        </h4>
                                         <p className="text-sm text-gray-600 truncate">
                                             {candidate.email_subject || 'No subject'}
                                         </p>
+                                    </div>
 
-                                        {/* Meta info */}
-                                        <div className="flex items-center gap-2 mt-2 text-xs text-gray-500 flex-wrap">
-                                            {candidate.resume_filename && (
-                                                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded">
-                                                    📎 CV
-                                                </span>
-                                            )}
-                                            <span>
-                                                {candidate.email_date 
-                                                    ? new Date(candidate.email_date).toLocaleDateString() 
-                                                    : 'No date'}
+                                    {/* Badge */}
+                                    <div className="flex items-center gap-2">
+                                        {isNew ? (
+                                            <span className="px-2 py-1 bg-orange-500 text-white text-xs font-bold rounded">
+                                                NEW
                                             </span>
-                                        </div>
+                                        ) : candidate.resume_filename ? (
+                                            <span className="px-2 py-1 bg-orange-500 text-white text-xs font-bold rounded">
+                                                CV
+                                            </span>
+                                        ) : null}
+                                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                        </svg>
                                     </div>
                                 </div>
-                            </div>
-                        )
-                    })}
+                            )
+                        })}
+                    </div>
                 </div>
             </div>
 
-            {/* RIGHT PANEL - Professional Profile View */}
-            {selectedCandidate && (
-                <div className="flex-1 overflow-y-auto pl-4">
+            {/* RIGHT PANEL - Candidate Profile */}
+            {selectedCandidate ? (
+                <div className="flex-1 overflow-y-auto">
                     {(() => {
-                        const cvData = selectedCandidate.cv_data || {}
+                        // Parse cv_data if it's a string
+                        let cvData = selectedCandidate.cv_data || {}
+                        if (typeof cvData === 'string') {
+                            try {
+                                cvData = JSON.parse(cvData)
+                            } catch (e) {
+                                cvData = {}
+                            }
+                        }
                         const personalInfo = cvData.personal_info || {}
                         const professionalInfo = cvData.professional_info || {}
 
                         return (
-                            <div className="space-y-6">
-                                {/* Close Button */}
-                                <button 
-                                    onClick={() => setSelectedCandidate(null)}
-                                    className="mb-4 px-4 py-2 text-gray-600 hover:text-gray-900 flex items-center gap-2 transition-colors"
-                                >
-                                    <span>×</span> Close Profile
-                                </button>
+                            <div className="max-w-4xl mx-auto p-8">
+                                {/* Header */}
+                                <h1 className="text-3xl font-bold text-gray-900 mb-8">
+                                    Candidate Profile: {personalInfo.name || selectedCandidate.name || 'Unknown'}
+                                </h1>
 
-                                {/* Profile Header Card */}
-                                <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
-                                    <div className="flex items-start gap-6">
-                                        {/* Profile Photo with Status */}
-                                        <div className="relative">
-                                            <div className="w-32 h-32 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center text-white text-4xl font-bold shrink-0 shadow-lg">
-                                                {getInitials(selectedCandidate.name || 'UN')}
-                                            </div>
-                                            {/* Online Status Indicator */}
-                                            <div className="absolute bottom-2 right-2 w-5 h-5 bg-green-500 border-4 border-white rounded-full"></div>
+                                {/* Profile Card */}
+                                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-6">
+                                    <div className="flex items-start gap-6 mb-8">
+                                        {/* Profile Photo */}
+                                        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white text-3xl font-bold shrink-0">
+                                            {getInitials(selectedCandidate.name || 'UN')}
                                         </div>
-                                        
+
                                         {/* Basic Info */}
                                         <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <h1 className="text-3xl font-bold text-gray-900">
-                                                    {personalInfo.name || selectedCandidate.name || 'Unknown Candidate'}
-                                                </h1>
-                                                {/* Verification Badge */}
-                                                <svg className="w-6 h-6 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                                </svg>
-                                            </div>
-                                            <p className="text-lg text-gray-600 mb-4">
+                                            <h2 className="text-2xl font-bold text-gray-900 mb-1">
+                                                {personalInfo.name || selectedCandidate.name || 'Unknown'}
+                                            </h2>
+                                            <p className="text-gray-600 mb-3">
                                                 {professionalInfo.current_position || selectedCandidate.email_subject || 'Position not specified'}
                                             </p>
-                                            
-                                            {/* Contact Info Row */}
-                                            <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                                                {(personalInfo.email || selectedCandidate.email) && (
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-blue-600">📧</span>
-                                                        <span>{personalInfo.email || selectedCandidate.email}</span>
-                                                    </div>
-                                                )}
-                                                {personalInfo.phone && (
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-green-600">📞</span>
-                                                        <span>{personalInfo.phone}</span>
-                                                    </div>
-                                                )}
-                                                {personalInfo.location && (
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-red-600">📍</span>
-                                                        <span>{personalInfo.location}</span>
-                                                    </div>
-                                                )}
+                                            <div className="flex items-center gap-6 text-sm text-gray-600">
+                                                <div className="flex items-center gap-2">
+                                                    <svg className="w-4 h-4 text-orange-500" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                                                        <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                                                    </svg>
+                                                    <span>{personalInfo.email || selectedCandidate.email}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <svg className="w-4 h-4 text-orange-500" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
+                                                    </svg>
+                                                    <span>{personalInfo.phone || 'Not provided'}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <svg className="w-4 h-4 text-orange-500" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                                                    </svg>
+                                                    <span>{personalInfo.location || 'Not specified'}</span>
+                                                </div>
                                             </div>
-                                        </div>
-
-                                        {/* Action Buttons */}
-                                        <div className="flex flex-col gap-2">
-                                            <button className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
-                                                Hire Me
-                                            </button>
-                                            <button className="px-6 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-colors border border-gray-300 font-medium">
-                                                Follow
-                                            </button>
                                         </div>
                                     </div>
 
-                                    {/* Stats Row */}
-                                    <div className="grid grid-cols-4 gap-6 mt-8">
-                                        <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-4 border border-emerald-100">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-emerald-600 text-xl">📊</span>
-                                                <span className="text-emerald-600 text-3xl font-bold">
-                                                    {professionalInfo.years_experience || 'N/A'}
-                                                </span>
-                                            </div>
-                                            <div className="text-sm text-gray-600">Years Experience</div>
-                                        </div>
-                                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-blue-600 text-xl">🌍</span>
-                                                <span className="text-blue-600 text-3xl font-bold">
-                                                    {professionalInfo.gcc_experience || 'N/A'}
-                                                </span>
-                                            </div>
-                                            <div className="text-sm text-gray-600">GCC Experience</div>
-                                        </div>
-                                        <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-purple-600 text-xl">💡</span>
-                                                <span className="text-purple-600 text-3xl font-bold">
-                                                    {cvData.skills?.length || 0}
-                                                </span>
-                                            </div>
-                                            <div className="text-sm text-gray-600">Skills</div>
-                                        </div>
-                                        <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-4 border border-amber-100">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-amber-600 text-xl">🏢</span>
-                                                <span className="text-amber-600 text-3xl font-bold">
-                                                    {cvData.work_history?.length || 0}
-                                                </span>
-                                            </div>
-                                            <div className="text-sm text-gray-600">Work History</div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Tabs */}
-                                <div className="bg-white rounded-xl shadow-md border border-gray-200">
-                                    <div className="flex border-b border-gray-200">
+                                    {/* Tabs */}
+                                    <div className="flex gap-6 border-b border-gray-200 mb-6">
                                         <button
-                                            onClick={() => setActiveTab('notes')}
-                                            className={`flex-1 px-6 py-4 text-sm font-medium transition-all ${
-                                                activeTab === 'notes'
-                                                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
-                                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                            onClick={() => setActiveTab('general')}
+                                            className={`pb-3 font-medium transition-colors ${
+                                                activeTab === 'general'
+                                                    ? 'text-orange-600 border-b-2 border-orange-600'
+                                                    : 'text-gray-600 hover:text-gray-900'
                                             }`}
                                         >
-                                            📝 Notes
-                                        </button>
-                                        <button
-                                            onClick={() => setActiveTab('tags')}
-                                            className={`flex-1 px-6 py-4 text-sm font-medium transition-all ${
-                                                activeTab === 'tags'
-                                                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
-                                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                            }`}
-                                        >
-                                            🏷️ Tags
-                                        </button>
-                                        <button
-                                            onClick={() => setActiveTab('email')}
-                                            className={`flex-1 px-6 py-4 text-sm font-medium transition-all ${
-                                                activeTab === 'email'
-                                                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
-                                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                            }`}
-                                        >
-                                            📧 Email Info
+                                            General Info
                                         </button>
                                         <button
                                             onClick={() => setActiveTab('cv')}
-                                            className={`flex-1 px-6 py-4 text-sm font-medium transition-all ${
+                                            className={`pb-3 font-medium transition-colors ${
                                                 activeTab === 'cv'
-                                                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
-                                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                                    ? 'text-orange-600 border-b-2 border-orange-600'
+                                                    : 'text-gray-600 hover:text-gray-900'
                                             }`}
                                         >
-                                            👤 CV Details
+                                            CV
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('transport')}
+                                            className={`pb-3 font-medium transition-colors ${
+                                                activeTab === 'transport'
+                                                    ? 'text-orange-600 border-b-2 border-orange-600'
+                                                    : 'text-gray-600 hover:text-gray-900'
+                                            }`}
+                                        >
+                                            Transport Info
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('skills')}
+                                            className={`pb-3 font-medium transition-colors ${
+                                                activeTab === 'skills'
+                                                    ? 'text-orange-600 border-b-2 border-orange-600'
+                                                    : 'text-gray-600 hover:text-gray-900'
+                                            }`}
+                                        >
+                                            Skills
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('experience')}
+                                            className={`pb-3 font-medium transition-colors ${
+                                                activeTab === 'experience'
+                                                    ? 'text-orange-600 border-b-2 border-orange-600'
+                                                    : 'text-gray-600 hover:text-gray-900'
+                                            }`}
+                                        >
+                                            Experience
                                         </button>
                                     </div>
 
                                     {/* Tab Content */}
-                                    <div className="p-6">
-                                        {/* Notes Tab */}
-                                        {activeTab === 'notes' && (
-                                            <div>
-                                                <h4 className="font-semibold text-gray-900 mb-3">Notes</h4>
-                                                <textarea
-                                                    value={notes}
-                                                    onChange={(e) => setNotes(e.target.value)}
-                                                    placeholder="Add your notes about this candidate..."
-                                                    className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                                                />
-                                                <button className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
-                                                    Save Notes
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {/* Tags Tab */}
-                                        {activeTab === 'tags' && (
-                                            <div>
-                                                <h4 className="font-semibold text-gray-900 mb-3">Tags</h4>
-                                                <div className="flex gap-2 mb-4">
-                                                    <input
-                                                        type="text"
-                                                        value={newTag}
-                                                        onChange={(e) => setNewTag(e.target.value)}
-                                                        onKeyPress={(e) => e.key === 'Enter' && addTag()}
-                                                        placeholder="Add a tag..."
-                                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                                                    />
-                                                    <button
-                                                        onClick={addTag}
-                                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                                                    >
-                                                        Add
-                                                    </button>
-                                                </div>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {tags.length > 0 ? (
-                                                        tags.map((tag, index) => (
-                                                            <span
-                                                                key={index}
-                                                                className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm flex items-center gap-2"
-                                                            >
-                                                                {tag}
-                                                                <button
-                                                                    onClick={() => removeTag(tag)}
-                                                                    className="text-blue-600 hover:text-blue-900 font-bold"
-                                                                >
-                                                                    ×
-                                                                </button>
-                                                            </span>
-                                                        ))
-                                                    ) : (
-                                                        <p className="text-gray-500 italic text-sm">No tags added yet</p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Email Info Tab - COMPREHENSIVE */}
-                                        {activeTab === 'email' && (
+                                    <div>
+                                        {/* General Info Tab */}
+                                        {activeTab === 'general' && (
                                             <div className="space-y-4">
-                                                <h4 className="font-semibold text-gray-900 mb-3">Email Information</h4>
-                                                
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div>
-                                                        <label className="text-sm font-medium text-gray-600">Subject</label>
-                                                        <p className="text-gray-900 mt-1">{selectedCandidate.email_subject || 'None'}</p>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                                                        <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
+                                                            {personalInfo.email || selectedCandidate.email || 'Not provided'}
+                                                        </div>
                                                     </div>
                                                     <div>
-                                                        <label className="text-sm font-medium text-gray-600">From</label>
-                                                        <p className="text-gray-900 mt-1">{selectedCandidate.email_from || selectedCandidate.email || 'None'}</p>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+                                                        <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between">
+                                                            <span>{personalInfo.phone || 'Not provided'}</span>
+                                                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                        </div>
                                                     </div>
                                                     <div>
-                                                        <label className="text-sm font-medium text-gray-600">To</label>
-                                                        <p className="text-gray-900 mt-1">{selectedCandidate.email_to || 'None'}</p>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                                                        <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between">
+                                                            <span>{personalInfo.location || 'Not specified'}</span>
+                                                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                        </div>
                                                     </div>
                                                     <div>
-                                                        <label className="text-sm font-medium text-gray-600">CC</label>
-                                                        <p className="text-gray-900 mt-1">{selectedCandidate.email_cc || 'None'}</p>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Expected Salary</label>
+                                                        <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between">
+                                                            <span>Not specified</span>
+                                                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <label className="text-sm font-medium text-gray-600">Date</label>
-                                                        <p className="text-gray-900 mt-1">
-                                                            {selectedCandidate.email_date ? new Date(selectedCandidate.email_date).toLocaleString() : 'None'}
-                                                        </p>
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-sm font-medium text-gray-600">Attachments</label>
-                                                        <p className="text-gray-900 mt-1">{selectedCandidate.resume_filename || 'None'}</p>
+                                                    <div className="col-span-2">
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Availability</label>
+                                                        <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between">
+                                                            <span>Available</span>
+                                                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                        </div>
                                                     </div>
                                                 </div>
 
-                                                {/* Email Body */}
-                                                <div>
-                                                    <label className="text-sm font-medium text-gray-600 mb-2 block">Email Body</label>
-                                                    <div className="bg-white border border-gray-200 rounded-lg p-4 max-h-64 overflow-y-auto">
-                                                        <p className="text-gray-700 text-sm whitespace-pre-wrap">
-                                                            {selectedCandidate.email_body || 'No email body available'}
-                                                        </p>
+                                                {/* Email Information */}
+                                                <div className="border-t border-gray-200 pt-4 mt-6">
+                                                    <h4 className="font-semibold text-gray-900 mb-3">Email Information</h4>
+                                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                                        <div>
+                                                            <span className="text-gray-600">Subject:</span>
+                                                            <p className="text-gray-900 mt-1">{selectedCandidate.email_subject || 'None'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-gray-600">From:</span>
+                                                            <p className="text-gray-900 mt-1">{selectedCandidate.email_from || 'None'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-gray-600">Date:</span>
+                                                            <p className="text-gray-900 mt-1">
+                                                                {selectedCandidate.email_date 
+                                                                    ? new Date(selectedCandidate.email_date).toLocaleDateString() 
+                                                                    : 'None'}
+                                                            </p>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-gray-600">Attachment:</span>
+                                                            <p className="text-gray-900 mt-1">{selectedCandidate.resume_filename || 'None'}</p>
+                                                        </div>
                                                     </div>
                                                 </div>
 
-                                                {/* Email Signature */}
-                                                {selectedCandidate.email_signature && (
-                                                    <div>
-                                                        <label className="text-sm font-medium text-gray-600 mb-2 block">Signature</label>
-                                                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                                                            <p className="text-gray-700 text-sm whitespace-pre-wrap">{selectedCandidate.email_signature}</p>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Extracted Information */}
-                                                {(selectedCandidate.extracted_phones || selectedCandidate.extracted_emails || selectedCandidate.extracted_links) && (
-                                                    <div className="border-t border-gray-300 pt-4">
-                                                        <h5 className="font-semibold text-gray-900 mb-3">Extracted Information</h5>
-                                                        <div className="space-y-3">
-                                                            {/* Extracted Phone Numbers */}
-                                                            {selectedCandidate.extracted_phones && (
-                                                                <div>
-                                                                    <label className="text-sm font-medium text-gray-600 mb-1.5 block">📞 Phone Numbers</label>
-                                                                    <div className="flex flex-wrap gap-2">
-                                                                        {selectedCandidate.extracted_phones.split(',').map((phone: string, index: number) => (
-                                                                            <a
-                                                                                key={index}
-                                                                                href={`tel:${phone.trim()}`}
-                                                                                className="px-3 py-1.5 bg-green-50 text-green-800 rounded-lg text-sm font-medium border border-green-200 hover:bg-green-100 transition-colors"
-                                                                            >
-                                                                                {phone.trim()}
-                                                                            </a>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                            
-                                                            {/* Extracted Emails */}
-                                                            {selectedCandidate.extracted_emails && (
-                                                                <div>
-                                                                    <label className="text-sm font-medium text-gray-600 mb-1.5 block">📧 Email Addresses</label>
-                                                                    <div className="flex flex-wrap gap-2">
-                                                                        {selectedCandidate.extracted_emails.split(',').map((email: string, index: number) => (
-                                                                            <a
-                                                                                key={index}
-                                                                                href={`mailto:${email.trim()}`}
-                                                                                className="px-3 py-1.5 bg-blue-50 text-blue-800 rounded-lg text-sm font-medium border border-blue-200 hover:bg-blue-100 transition-colors"
-                                                                            >
-                                                                                {email.trim()}
-                                                                            </a>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                            
-                                                            {/* Extracted Links */}
-                                                            {selectedCandidate.extracted_links && (
-                                                                <div>
-                                                                    <label className="text-sm font-medium text-gray-600 mb-1.5 block">🔗 Links</label>
-                                                                    <div className="flex flex-col gap-2">
-                                                                        {selectedCandidate.extracted_links.split(',').map((link: string, index: number) => (
-                                                                            <a
-                                                                                key={index}
-                                                                                href={link.trim()}
-                                                                                target="_blank"
-                                                                                rel="noopener noreferrer"
-                                                                                className="px-3 py-1.5 bg-purple-50 text-purple-800 rounded-lg text-sm font-medium border border-purple-200 hover:bg-purple-100 transition-colors break-all"
-                                                                            >
-                                                                                {link.trim()}
-                                                                            </a>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                )}
+                                                {/* Notes */}
+                                                <div className="border-t border-gray-200 pt-4 mt-6">
+                                                    <h4 className="font-semibold text-gray-900 mb-3">Notes:</h4>
+                                                    <textarea
+                                                        value={notes}
+                                                        onChange={(e) => setNotes(e.target.value)}
+                                                        placeholder="Add your notes about this candidate..."
+                                                        className="w-full h-24 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+                                                    />
+                                                </div>
                                             </div>
                                         )}
 
-                                        {/* CV Details Tab - COMPREHENSIVE */}
+                                        {/* CV Tab */}
                                         {activeTab === 'cv' && (
                                             <div className="space-y-6">
-                                                <h4 className="font-semibold text-gray-900 mb-3">CV Information</h4>
-
                                                 {/* Personal Information */}
-                                                <div className="bg-white rounded-lg border border-gray-200 p-4">
-                                                    <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                                                        <span>👤</span> Personal Information
-                                                    </h5>
-                                                    <div className="grid grid-cols-2 gap-3 text-sm">
+                                                <div>
+                                                    <h4 className="font-semibold text-gray-900 mb-3">Personal Information</h4>
+                                                    <div className="grid grid-cols-2 gap-4 text-sm">
                                                         <div>
-                                                            <span className="text-gray-600">Name:</span>
-                                                            <span className="ml-2 text-gray-900 font-medium">{personalInfo.name || 'None'}</span>
+                                                            <span className="text-gray-600">Full Name:</span>
+                                                            <p className="text-gray-900 mt-1 font-medium">{personalInfo.name || 'None'}</p>
                                                         </div>
                                                         <div>
                                                             <span className="text-gray-600">Email:</span>
-                                                            <span className="ml-2 text-gray-900 font-medium">{personalInfo.email || selectedCandidate.email || 'None'}</span>
+                                                            <p className="text-gray-900 mt-1 font-medium">{personalInfo.email || 'None'}</p>
                                                         </div>
                                                         <div>
                                                             <span className="text-gray-600">Phone:</span>
-                                                            <span className="ml-2 text-gray-900 font-medium">{personalInfo.phone || 'None'}</span>
-                                                        </div>
-                                                        <div>
-                                                            <span className="text-gray-600">Location:</span>
-                                                            <span className="ml-2 text-gray-900 font-medium">{personalInfo.location || 'None'}</span>
+                                                            <p className="text-gray-900 mt-1 font-medium">{personalInfo.phone || 'None'}</p>
                                                         </div>
                                                         <div>
                                                             <span className="text-gray-600">Date of Birth:</span>
-                                                            <span className="ml-2 text-gray-900 font-medium">{personalInfo.dob || 'None'}</span>
+                                                            <p className="text-gray-900 mt-1 font-medium">{personalInfo.dob || 'None'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-gray-600">Location:</span>
+                                                            <p className="text-gray-900 mt-1 font-medium">{personalInfo.location || 'None'}</p>
                                                         </div>
                                                         <div>
                                                             <span className="text-gray-600">LinkedIn:</span>
-                                                            <span className="ml-2 text-blue-600 font-medium">
-                                                                {personalInfo.linkedin ? (
-                                                                    <a href={personalInfo.linkedin.startsWith('http') ? personalInfo.linkedin : `https://${personalInfo.linkedin}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                                                                        {personalInfo.linkedin}
-                                                                    </a>
-                                                                ) : 'None'}
-                                                            </span>
+                                                            {personalInfo.linkedin ? (
+                                                                <a href={personalInfo.linkedin.startsWith('http') ? personalInfo.linkedin : `https://${personalInfo.linkedin}`} 
+                                                                   target="_blank" rel="noopener noreferrer"
+                                                                   className="text-orange-600 mt-1 font-medium hover:underline block">
+                                                                    {personalInfo.linkedin}
+                                                                </a>
+                                                            ) : (
+                                                                <p className="text-gray-900 mt-1 font-medium">None</p>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
 
                                                 {/* Professional Information */}
-                                                <div className="bg-white rounded-lg border border-gray-200 p-4">
-                                                    <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                                                        <span>💼</span> Professional Information
-                                                    </h5>
-                                                    <div className="grid grid-cols-3 gap-3 text-sm">
+                                                <div className="border-t border-gray-200 pt-4">
+                                                    <h4 className="font-semibold text-gray-900 mb-3">Professional Information</h4>
+                                                    <div className="grid grid-cols-3 gap-4 text-sm">
                                                         <div>
                                                             <span className="text-gray-600">Years of Experience:</span>
-                                                            <span className="ml-2 text-gray-900 font-medium">{professionalInfo.years_experience || 'None'}</span>
+                                                            <p className="text-gray-900 mt-1 font-medium">{professionalInfo.years_experience || 'None'}</p>
                                                         </div>
                                                         <div>
                                                             <span className="text-gray-600">GCC Experience:</span>
-                                                            <span className="ml-2 text-gray-900 font-medium">{professionalInfo.gcc_experience || 'None'}</span>
+                                                            <p className="text-gray-900 mt-1 font-medium">{professionalInfo.gcc_experience || 'None'}</p>
                                                         </div>
                                                         <div>
                                                             <span className="text-gray-600">Willing to Relocate:</span>
-                                                            <span className="ml-2 text-gray-900 font-medium">{professionalInfo.willing_to_relocate || 'None'}</span>
+                                                            <p className="text-gray-900 mt-1 font-medium">{professionalInfo.willing_to_relocate || 'None'}</p>
                                                         </div>
                                                     </div>
                                                 </div>
 
                                                 {/* Education */}
-                                                {cvData.education && cvData.education.length > 0 ? (
-                                                    <div>
-                                                        <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                                                            <span>🎓</span> Education
-                                                        </h5>
+                                                {cvData.education && cvData.education.length > 0 && (
+                                                    <div className="border-t border-gray-200 pt-4">
+                                                        <h4 className="font-semibold text-gray-900 mb-3">Education</h4>
                                                         <div className="space-y-3">
                                                             {cvData.education.map((edu: any, index: number) => (
-                                                                <div key={index} className="bg-white rounded-lg border border-gray-200 p-4">
-                                                                    <div className="font-semibold text-gray-900 mb-1">
-                                                                        {edu.degree || 'Degree not specified'} {edu.major && `in ${edu.major}`}
+                                                                <div key={index} className="p-4 bg-gray-50 rounded-lg">
+                                                                    <div className="font-medium text-gray-900">
+                                                                        {edu.degree} {edu.major && `in ${edu.major}`}
                                                                     </div>
-                                                                    <div className="text-gray-700 mb-1">{edu.institution || 'Institution not specified'}</div>
-                                                                    <div className="flex gap-4 text-sm text-gray-600">
-                                                                        {edu.year && <span>📅 {edu.year}</span>}
-                                                                        {edu.cgpa && <span>📊 CGPA: {edu.cgpa}</span>}
+                                                                    <div className="text-sm text-gray-600 mt-1">{edu.institution}</div>
+                                                                    <div className="flex gap-4 text-sm text-gray-600 mt-1">
+                                                                        {edu.year && <span>Year: {edu.year}</span>}
+                                                                        {edu.cgpa && <span>CGPA: {edu.cgpa}</span>}
                                                                     </div>
                                                                 </div>
                                                             ))}
                                                         </div>
                                                     </div>
-                                                ) : (
-                                                    <div className="text-gray-500 italic text-sm">No education information available</div>
-                                                )}
-
-                                                {/* Work History */}
-                                                {cvData.work_history && cvData.work_history.length > 0 ? (
-                                                    <div>
-                                                        <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                                                            <span>🏢</span> Work Experience
-                                                        </h5>
-                                                        <div className="space-y-3">
-                                                            {cvData.work_history.map((job: any, index: number) => (
-                                                                <div key={index} className="bg-white rounded-lg border border-gray-200 border-l-4 border-l-blue-500 p-4">
-                                                                    <div className="font-semibold text-gray-900 mb-1">
-                                                                        {job.job_title || 'Position not specified'}
-                                                                    </div>
-                                                                    <div className="text-gray-700 mb-2">{job.company || job.company_name || 'Company not specified'}</div>
-                                                                    <div className="flex flex-wrap gap-3 text-sm text-gray-600">
-                                                                        <span>📅 {job.start_date || 'Start date not specified'} - {job.end_date || 'Present'}</span>
-                                                                        {job.duration && <span>⏱️ {job.duration}</span>}
-                                                                        {job.location && <span>📍 {job.location}</span>}
-                                                                    </div>
-                                                                    {job.responsibilities && (
-                                                                        <p className="text-sm text-gray-600 mt-2">{job.responsibilities}</p>
-                                                                    )}
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="text-gray-500 italic text-sm">No work history available</div>
-                                                )}
-
-                                                {/* Skills */}
-                                                {cvData.skills && cvData.skills.length > 0 ? (
-                                                    <div>
-                                                        <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                                                            <span>💡</span> Skills
-                                                        </h5>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {cvData.skills.map((skill: string, index: number) => (
-                                                                <span key={index} className="px-3 py-1.5 bg-blue-100 text-blue-800 rounded-lg text-sm font-medium">
-                                                                    {skill}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="text-gray-500 italic text-sm">No skills listed</div>
                                                 )}
 
                                                 {/* Certifications */}
-                                                {cvData.certifications && cvData.certifications.length > 0 ? (
-                                                    <div>
-                                                        <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                                                            <span>📜</span> Certifications
-                                                        </h5>
+                                                {cvData.certifications && cvData.certifications.length > 0 && (
+                                                    <div className="border-t border-gray-200 pt-4">
+                                                        <h4 className="font-semibold text-gray-900 mb-3">Certifications</h4>
                                                         <div className="space-y-2">
                                                             {cvData.certifications.map((cert: any, index: number) => (
-                                                                <div key={index} className="flex items-start gap-2 bg-white rounded-lg border border-gray-200 p-3">
-                                                                    <span className="text-green-600">✓</span>
+                                                                <div key={index} className="flex items-start gap-2">
+                                                                    <svg className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                                    </svg>
                                                                     <span className="text-gray-900">
                                                                         {typeof cert === 'string' ? cert : cert.name || cert.title || 'Certification'}
                                                                     </span>
@@ -664,25 +506,99 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
                                                             ))}
                                                         </div>
                                                     </div>
-                                                ) : (
-                                                    <div className="text-gray-500 italic text-sm">No certifications listed</div>
                                                 )}
+                                            </div>
+                                        )}
 
-                                                {/* No CV Data Message */}
-                                                {!cvData.education && !cvData.work_history && !cvData.skills && !cvData.certifications && (
-                                                    <div className="text-center py-8">
-                                                        <div className="text-5xl mb-3">📄</div>
-                                                        <h4 className="text-lg font-semibold text-gray-600 mb-2">No CV Data Available</h4>
-                                                        <p className="text-gray-500 text-sm">CV information could not be extracted from this candidate's resume.</p>
+                                        {/* Skills Tab */}
+                                        {activeTab === 'skills' && (
+                                            <div>
+                                                <h4 className="font-semibold text-gray-900 mb-4">Skills</h4>
+                                                {cvData.skills && cvData.skills.length > 0 ? (
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {cvData.skills.map((skill: string, index: number) => (
+                                                            <span key={index} className="px-4 py-2 bg-orange-50 text-orange-700 rounded-lg text-sm font-medium border border-orange-200">
+                                                                {skill}
+                                                            </span>
+                                                        ))}
                                                     </div>
+                                                ) : (
+                                                    <p className="text-gray-500 italic">No skills listed</p>
                                                 )}
+                                            </div>
+                                        )}
+
+                                        {/* Experience Tab */}
+                                        {activeTab === 'experience' && (
+                                            <div>
+                                                <h4 className="font-semibold text-gray-900 mb-4">Work Experience</h4>
+                                                {cvData.work_history && cvData.work_history.length > 0 ? (
+                                                    <div className="space-y-4">
+                                                        {cvData.work_history.map((job: any, index: number) => (
+                                                            <div key={index} className="p-4 bg-gray-50 rounded-lg border-l-4 border-orange-500">
+                                                                <div className="font-semibold text-gray-900 mb-1">
+                                                                    {job.job_title || 'Position not specified'}
+                                                                </div>
+                                                                <div className="text-gray-700 mb-2">{job.company || job.company_name || 'Company not specified'}</div>
+                                                                <div className="flex flex-wrap gap-3 text-sm text-gray-600">
+                                                                    <span>{job.start_date || 'Start date not specified'} - {job.end_date || 'Present'}</span>
+                                                                    {job.duration && <span>• {job.duration}</span>}
+                                                                    {job.location && <span>• {job.location}</span>}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-gray-500 italic">No work history available</p>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Transport Info Tab */}
+                                        {activeTab === 'transport' && (
+                                            <div>
+                                                <h4 className="font-semibold text-gray-900 mb-4">Transport Information</h4>
+                                                <div className="space-y-4">
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Has Own Vehicle</label>
+                                                        <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
+                                                            Not specified
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">License Type</label>
+                                                        <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
+                                                            Not specified
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
                                 </div>
+
+                                {/* Action Buttons */}
+                                <div className="flex justify-end gap-4">
+                                    <button className="px-6 py-3 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-colors">
+                                        Reject
+                                    </button>
+                                    <button className="px-6 py-3 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors">
+                                        Move to Interview
+                                    </button>
+                                </div>
                             </div>
                         )
                     })()}
+                </div>
+            ) : (
+                <div className="flex-1 flex items-center justify-center bg-gray-50">
+                    <div className="text-center">
+                        <svg className="w-24 h-24 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        <h3 className="text-xl font-semibold text-gray-600 mb-2">No Candidate Selected</h3>
+                        <p className="text-gray-500">Select a candidate from the list to view their profile</p>
+                    </div>
                 </div>
             )}
         </div>
