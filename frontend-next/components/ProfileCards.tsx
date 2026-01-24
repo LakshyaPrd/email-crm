@@ -346,24 +346,119 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
                                     {currentTab === 'email' && (
                                         <div className="space-y-4">
                                             <h4 className="font-semibold text-gray-900 mb-3">Email Information</h4>
-                                            <div>
-                                                <label className="text-sm font-medium text-gray-600">Subject</label>
-                                                <p className="text-gray-900 mt-1">{candidate.email_subject || 'No subject'}</p>
+                                            
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-sm font-medium text-gray-600">Subject</label>
+                                                    <p className="text-gray-900 mt-1">{candidate.email_subject || 'None'}</p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium text-gray-600">From</label>
+                                                    <p className="text-gray-900 mt-1">{candidate.email_from || candidate.email || 'None'}</p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium text-gray-600">To</label>
+                                                    <p className="text-gray-900 mt-1">{candidate.email_to || 'None'}</p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium text-gray-600">CC</label>
+                                                    <p className="text-gray-900 mt-1">{candidate.email_cc || 'None'}</p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium text-gray-600">Date</label>
+                                                    <p className="text-gray-900 mt-1">
+                                                        {candidate.email_date ? new Date(candidate.email_date).toLocaleString() : 'None'}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium text-gray-600">Attachments</label>
+                                                    <p className="text-gray-900 mt-1">{candidate.resume_filename || 'None'}</p>
+                                                </div>
                                             </div>
+
+                                            {/* Email Body */}
                                             <div>
-                                                <label className="text-sm font-medium text-gray-600">From</label>
-                                                <p className="text-gray-900 mt-1">{candidate.email_from || candidate.email || 'Unknown'}</p>
+                                                <label className="text-sm font-medium text-gray-600 mb-2 block">Email Body</label>
+                                                <div className="bg-white border border-gray-200 rounded-lg p-4 max-h-64 overflow-y-auto">
+                                                    <p className="text-gray-700 text-sm whitespace-pre-wrap">
+                                                        {candidate.email_body || 'No email body available'}
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <label className="text-sm font-medium text-gray-600">Date</label>
-                                                <p className="text-gray-900 mt-1">
-                                                    {candidate.email_date ? new Date(candidate.email_date).toLocaleDateString() : 'No date'}
-                                                </p>
-                                            </div>
-                                            <div>
-                                                <label className="text-sm font-medium text-gray-600">Attachments</label>
-                                                <p className="text-gray-900 mt-1">{candidate.resume_filename || 'No attachments'}</p>
-                                            </div>
+
+                                            {/* Email Signature */}
+                                            {candidate.email_signature && (
+                                                <div>
+                                                    <label className="text-sm font-medium text-gray-600 mb-2 block">Signature</label>
+                                                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{candidate.email_signature}</p>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Extracted Information */}
+                                            {(candidate.extracted_phones || candidate.extracted_emails || candidate.extracted_links) && (
+                                                <div className="border-t border-gray-300 pt-4">
+                                                    <h5 className="font-semibold text-gray-900 mb-3">Extracted Information</h5>
+                                                    <div className="space-y-3">
+                                                        {/* Extracted Phone Numbers */}
+                                                        {candidate.extracted_phones && (
+                                                            <div>
+                                                                <label className="text-sm font-medium text-gray-600 mb-1.5 block">📞 Phone Numbers</label>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {candidate.extracted_phones.split(',').map((phone: string, index: number) => (
+                                                                        <a
+                                                                            key={index}
+                                                                            href={`tel:${phone.trim()}`}
+                                                                            className="px-3 py-1.5 bg-green-50 text-green-800 rounded-lg text-sm font-medium border border-green-200 hover:bg-green-100 transition-colors"
+                                                                        >
+                                                                            {phone.trim()}
+                                                                        </a>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {/* Extracted Emails */}
+                                                        {candidate.extracted_emails && (
+                                                            <div>
+                                                                <label className="text-sm font-medium text-gray-600 mb-1.5 block">📧 Email Addresses</label>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {candidate.extracted_emails.split(',').map((email: string, index: number) => (
+                                                                        <a
+                                                                            key={index}
+                                                                            href={`mailto:${email.trim()}`}
+                                                                            className="px-3 py-1.5 bg-blue-50 text-blue-800 rounded-lg text-sm font-medium border border-blue-200 hover:bg-blue-100 transition-colors"
+                                                                        >
+                                                                            {email.trim()}
+                                                                        </a>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {/* Extracted Links */}
+                                                        {candidate.extracted_links && (
+                                                            <div>
+                                                                <label className="text-sm font-medium text-gray-600 mb-1.5 block">🔗 Links</label>
+                                                                <div className="flex flex-col gap-2">
+                                                                    {candidate.extracted_links.split(',').map((link: string, index: number) => (
+                                                                        <a
+                                                                            key={index}
+                                                                            href={link.trim()}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="px-3 py-1.5 bg-purple-50 text-purple-800 rounded-lg text-sm font-medium border border-purple-200 hover:bg-purple-100 transition-colors break-all"
+                                                                        >
+                                                                            {link.trim()}
+                                                                        </a>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
@@ -372,55 +467,170 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
                                         <div className="space-y-6">
                                             <h4 className="font-semibold text-gray-900 mb-3">CV Information</h4>
 
-                                            {/* Work History */}
-                                            {cvData.work_history && cvData.work_history.length > 0 && (
-                                                <div>
-                                                    <h5 className="text-lg font-semibold text-gray-900 mb-2">🏢 Work Experience</h5>
-                                                    <div className="space-y-3">
-                                                        {cvData.work_history.map((job: any, index: number) => (
-                                                            <div key={index} className="border-l-4 border-blue-500 pl-4 py-2 bg-white rounded">
-                                                                <div className="font-semibold text-gray-900">{job.job_title || 'Position not specified'}</div>
-                                                                <div className="text-gray-700">{job.company_name || 'Company not specified'}</div>
-                                                                <div className="text-sm text-gray-600">{job.start_date} - {job.end_date || 'Present'}</div>
-                                                            </div>
-                                                        ))}
+                                            {/* Personal Information */}
+                                            <div className="bg-white rounded-lg border border-gray-200 p-4">
+                                                <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                    <span>👤</span> Personal Information
+                                                </h5>
+                                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                                    <div>
+                                                        <span className="text-gray-600">Name:</span>
+                                                        <span className="ml-2 text-gray-900 font-medium">{personalInfo.name || 'None'}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-gray-600">Email:</span>
+                                                        <span className="ml-2 text-gray-900 font-medium">{personalInfo.email || candidate.email || 'None'}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-gray-600">Phone:</span>
+                                                        <span className="ml-2 text-gray-900 font-medium">{personalInfo.phone || 'None'}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-gray-600">Location:</span>
+                                                        <span className="ml-2 text-gray-900 font-medium">{personalInfo.location || 'None'}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-gray-600">Date of Birth:</span>
+                                                        <span className="ml-2 text-gray-900 font-medium">{personalInfo.dob || 'None'}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-gray-600">LinkedIn:</span>
+                                                        <span className="ml-2 text-blue-600 font-medium">
+                                                            {personalInfo.linkedin ? (
+                                                                <a href={personalInfo.linkedin.startsWith('http') ? personalInfo.linkedin : `https://${personalInfo.linkedin}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                                                                    {personalInfo.linkedin}
+                                                                </a>
+                                                            ) : 'None'}
+                                                        </span>
                                                     </div>
                                                 </div>
-                                            )}
+                                            </div>
 
-                                            {/* Skills */}
-                                            {cvData.skills && cvData.skills.length > 0 && (
-                                                <div>
-                                                    <h5 className="text-lg font-semibold text-gray-900 mb-2">💡 Skills</h5>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {cvData.skills.map((skill: string, index: number) => (
-                                                            <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-lg text-sm font-medium">
-                                                                {skill}
-                                                            </span>
-                                                        ))}
+                                            {/* Professional Information */}
+                                            <div className="bg-white rounded-lg border border-gray-200 p-4">
+                                                <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                    <span>💼</span> Professional Information
+                                                </h5>
+                                                <div className="grid grid-cols-3 gap-3 text-sm">
+                                                    <div>
+                                                        <span className="text-gray-600">Years of Experience:</span>
+                                                        <span className="ml-2 text-gray-900 font-medium">{professionalInfo.years_experience || 'None'}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-gray-600">GCC Experience:</span>
+                                                        <span className="ml-2 text-gray-900 font-medium">{professionalInfo.gcc_experience || 'None'}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-gray-600">Willing to Relocate:</span>
+                                                        <span className="ml-2 text-gray-900 font-medium">{professionalInfo.willing_to_relocate || 'None'}</span>
                                                     </div>
                                                 </div>
-                                            )}
+                                            </div>
 
                                             {/* Education */}
-                                            {cvData.education && cvData.education.length > 0 && (
+                                            {cvData.education && cvData.education.length > 0 ? (
                                                 <div>
-                                                    <h5 className="text-lg font-semibold text-gray-900 mb-2">🎓 Education</h5>
-                                                    <div className="space-y-2">
+                                                    <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                        <span>🎓</span> Education
+                                                    </h5>
+                                                    <div className="space-y-3">
                                                         {cvData.education.map((edu: any, index: number) => (
-                                                            <div key={index} className="flex items-start gap-2">
-                                                                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 shrink-0"></div>
-                                                                <div>
-                                                                    <div className="font-medium text-gray-900">{edu.degree} {edu.major && `in ${edu.major}`}</div>
-                                                                    <div className="text-sm text-gray-600">{edu.institution} {edu.year && `• ${edu.year}`}</div>
+                                                            <div key={index} className="bg-white rounded-lg border border-gray-200 p-4">
+                                                                <div className="font-semibold text-gray-900 mb-1">
+                                                                    {edu.degree || 'Degree not specified'} {edu.major && `in ${edu.major}`}
+                                                                </div>
+                                                                <div className="text-gray-700 mb-1">{edu.institution || 'Institution not specified'}</div>
+                                                                <div className="flex gap-4 text-sm text-gray-600">
+                                                                    {edu.year && <span>📅 {edu.year}</span>}
+                                                                    {edu.cgpa && <span>📊 CGPA: {edu.cgpa}</span>}
                                                                 </div>
                                                             </div>
                                                         ))}
                                                     </div>
                                                 </div>
+                                            ) : (
+                                                <div className="text-gray-500 italic text-sm">No education information available</div>
+                                            )}
+
+                                            {/* Work History */}
+                                            {cvData.work_history && cvData.work_history.length > 0 ? (
+                                                <div>
+                                                    <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                        <span>🏢</span> Work Experience
+                                                    </h5>
+                                                    <div className="space-y-3">
+                                                        {cvData.work_history.map((job: any, index: number) => (
+                                                            <div key={index} className="bg-white rounded-lg border border-gray-200 border-l-4 border-l-blue-500 p-4">
+                                                                <div className="font-semibold text-gray-900 mb-1">
+                                                                    {job.job_title || 'Position not specified'}
+                                                                </div>
+                                                                <div className="text-gray-700 mb-2">{job.company || job.company_name || 'Company not specified'}</div>
+                                                                <div className="flex flex-wrap gap-3 text-sm text-gray-600">
+                                                                    <span>📅 {job.start_date || 'Start date not specified'} - {job.end_date || 'Present'}</span>
+                                                                    {job.duration && <span>⏱️ {job.duration}</span>}
+                                                                    {job.location && <span>📍 {job.location}</span>}
+                                                                </div>
+                                                                {job.responsibilities && (
+                                                                    <p className="text-sm text-gray-600 mt-2">{job.responsibilities}</p>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="text-gray-500 italic text-sm">No work history available</div>
+                                            )}
+
+                                            {/* Skills */}
+                                            {cvData.skills && cvData.skills.length > 0 ? (
+                                                <div>
+                                                    <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                        <span>💡</span> Skills
+                                                    </h5>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {cvData.skills.map((skill: string, index: number) => (
+                                                            <span key={index} className="px-3 py-1.5 bg-blue-100 text-blue-800 rounded-lg text-sm font-medium">
+                                                                {skill}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="text-gray-500 italic text-sm">No skills listed</div>
+                                            )}
+
+                                            {/* Certifications */}
+                                            {cvData.certifications && cvData.certifications.length > 0 ? (
+                                                <div>
+                                                    <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                        <span>📜</span> Certifications
+                                                    </h5>
+                                                    <div className="space-y-2">
+                                                        {cvData.certifications.map((cert: any, index: number) => (
+                                                            <div key={index} className="flex items-start gap-2 bg-white rounded-lg border border-gray-200 p-3">
+                                                                <span className="text-green-600">✓</span>
+                                                                <span className="text-gray-900">
+                                                                    {typeof cert === 'string' ? cert : cert.name || cert.title || 'Certification'}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="text-gray-500 italic text-sm">No certifications listed</div>
+                                            )}
+
+                                            {/* No CV Data Message */}
+                                            {!cvData.education && !cvData.work_history && !cvData.skills && !cvData.certifications && (
+                                                <div className="text-center py-8">
+                                                    <div className="text-5xl mb-3">📄</div>
+                                                    <h4 className="text-lg font-semibold text-gray-600 mb-2">No CV Data Available</h4>
+                                                    <p className="text-gray-500 text-sm">CV information could not be extracted from this candidate's resume.</p>
+                                                </div>
                                             )}
                                         </div>
                                     )}
+
                                 </div>
                             )}
                         </div>
