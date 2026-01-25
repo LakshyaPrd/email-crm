@@ -498,6 +498,14 @@ async def get_candidates(
     # Build result with recruiter names
     result = []
     for c in filtered_candidates:
+        # Parse cv_data if it's a string
+        cv_data_parsed = None
+        if c.cv_data:
+            try:
+                cv_data_parsed = json.loads(c.cv_data) if isinstance(c.cv_data, str) else c.cv_data
+            except:
+                cv_data_parsed = c.cv_data
+        
         candidate_dict = {
             "id": c.id,
             "unique_id": c.unique_id,
@@ -509,12 +517,21 @@ async def get_candidates(
             "email_to": c.email_to,
             "email_cc": c.email_cc,
             "email_date": c.email_date,
+            "email_body": c.email_body,  # Added
+            "email_signature": c.email_signature,  # Added
             "resume_filename": c.resume_filename,
+            "resume_path": c.resume_path,  # Added
+            "resume_text": c.resume_text,  # Added
+            "cv_data": cv_data_parsed,  # Added and parsed
+            "extracted_phones": c.extracted_phones,  # Added
+            "extracted_emails": c.extracted_emails,  # Added
+            "extracted_links": c.extracted_links,  # Added
             "notes": c.notes,
             "tags": c.tags,
             "created_at": c.created_at,
             "recruiter_id": c.recruiter_id,
-            "recruiter_name": None
+            "recruiter_name": None,
+            "gmail_message_id": c.gmail_message_id  # Added
         }
         # Get recruiter name
         if c.recruiter_id:
