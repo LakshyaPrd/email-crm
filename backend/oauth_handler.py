@@ -86,7 +86,7 @@ class WebOAuthHandler:
             'access_token': creds.token,
             'refresh_token': creds.refresh_token,
             'token_expiry': creds.expiry.isoformat() if creds.expiry else None,
-            'scopes': json.dumps(list(creds.scopes)) if creds.scopes else '[]'
+            'scopes': list(creds.scopes) if creds.scopes else []
         }
     
     def refresh_access_token(self, refresh_token: str) -> Dict:
