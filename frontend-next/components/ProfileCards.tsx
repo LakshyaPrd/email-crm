@@ -460,6 +460,18 @@ export default function ProfileCards({ candidates, onRefresh }: ProfileCardsProp
                                             <div className="space-y-6">
                                                 <h4 className="font-semibold text-gray-900 mb-3">CV Information</h4>
 
+                                                {/* Professional Summary */}
+                                                {personalInfo.summary && (
+                                                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                                                        <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                            <span>📝</span> Professional Summary
+                                                        </h5>
+                                                        <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
+                                                            {personalInfo.summary}
+                                                        </p>
+                                                    </div>
+                                                )}
+
                                                 {/* Personal Information */}
                                                 <div className="bg-white rounded-lg border border-gray-200 p-4">
                                                     <h5 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">

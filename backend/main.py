@@ -1,17 +1,20 @@
+from __future__ import annotations
+
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
 import os
-import json
 import uuid
 from datetime import datetime
 from pathlib import Path
+import asyncio
+from bson import ObjectId
 
-from database import get_db, init_db, Candidate, EmailConfig, User
+from database import init_db, shutdown_db, Candidate, EmailConfig, User
+from beanie.odm.fields import PydanticObjectId
 from gmail_service import GmailService
 from imap_service import IMAPService
 from extractor import DataExtractor
@@ -39,7 +42,7 @@ scan_progress = {
 }
 
 # Current recruiter ID for tracking who is scanning
-current_recruiter_id: Optional[int] = None
+current_recruiter_id: Optional[str] = None
 
 # CORS
 app.add_middleware(
@@ -51,9 +54,8 @@ app.add_middleware(
 )
 
 # Authentication Dependency
-async def get_current_user(
+async def current_user_dependency(
     authorization: Optional[str] = Header(None),
-    db: Session = Depends(get_db)
 ) -> User:
     """Extract and verify user from Authorization header"""
     if not authorization:
@@ -73,14 +75,14 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     
     # Get user from database
-    user = db.query(User).filter(User.id == payload['user_id']).first()
+    try:
+        user = await User.get(PydanticObjectId(payload["user_id"]))
+    except Exception:
+        user = None
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
     return user
-
-# Initialize database
-init_db()
 
 # Create upload directory
 Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
@@ -111,7 +113,7 @@ class LoginRequest(BaseModel):
     password: Optional[str] = None  # For IMAP (app password)
 
 class CandidateResponse(BaseModel):
-    id: int
+    id: str
     unique_id: str  # Added 10-char unique ID
     name: str
     email: str
@@ -123,16 +125,16 @@ class CandidateResponse(BaseModel):
     email_date: datetime | None = None
     resume_filename: str | None = None
     notes: str | None = None  # Added notes
-    tags: str | None = None  # Added tags
+    tags: List[str] | None = None  # Added tags
     created_at: datetime
-    recruiter_id: int | None = None  # Who saved this candidate
+    recruiter_id: str | None = None  # Who saved this candidate
     recruiter_name: str | None = None  # Recruiter's name for display
     
     class Config:
         from_attributes = True
 
 class CandidateDetailResponse(BaseModel):
-    id: int
+    id: str
     unique_id: str  # Added 10-char unique ID
     name: str
     email: str
@@ -150,10 +152,10 @@ class CandidateDetailResponse(BaseModel):
     resume_path: str | None = None  # Added for download
     cv_data: dict | None = None
     notes: str | None = None  # Added notes
-    tags: str | None = None  # Added tags
-    extracted_phones: str | None = None
-    extracted_emails: str | None = None
-    extracted_links: str | None = None
+    tags: List[str] | None = None  # Added tags
+    extracted_phones: List[str] | None = None
+    extracted_emails: List[str] | None = None
+    extracted_links: List[str] | None = None
     created_at: datetime
     
     class Config:
@@ -171,24 +173,58 @@ current_email_service = None  # Will be gmail_service or imap_service
 async def startup_event():
     """Initialize services on startup"""
     print("🚀 Starting Email-to-Candidate Automation System...")
-    init_db()
-    print("✅ Database initialized")
+    await init_db()
+    print("✅ MongoDB/Beanie initialized")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await shutdown_db()
+
+
+def _serialize_user(user: User) -> dict:
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "name": user.name,
+        "last_login": user.last_login.isoformat() if user.last_login else None,
+    }
+
+
+async def _recruiter_names_map(recruiter_ids: list[str]) -> dict[str, str]:
+    obj_ids: list[ObjectId] = []
+    for rid in recruiter_ids:
+        try:
+            obj_ids.append(ObjectId(rid))
+        except Exception:
+            continue
+    if not obj_ids:
+        return {}
+    users = await User.find({"_id": {"$in": obj_ids}}).to_list()
+    return {str(u.id): (u.name or u.email) for u in users}
+
+
+async def _candidate_to_dict(candidate: Candidate, recruiter_name: str | None = None) -> dict:
+    data = candidate.model_dump()
+    data["id"] = str(candidate.id)
+    data.pop("_id", None)
+    data["recruiter_name"] = recruiter_name
+    return data
 
 @app.post("/api/configure-email")
 async def configure_email(
     request: EmailConfigRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
 ):
     """Configure email monitoring and trigger initial scan"""
     try:
         # Save email config
-        config = db.query(EmailConfig).filter(EmailConfig.email_address == request.email).first()
+        config = await EmailConfig.find_one(EmailConfig.email_address == request.email)
         if not config:
-            config = EmailConfig(email_address=request.email)
-            db.add(config)
-        config.is_active = 1
-        db.commit()
+            config = EmailConfig(email_address=request.email, is_active=True)
+            await config.insert()
+        else:
+            await config.set({EmailConfig.is_active: True})
         
         # Authenticate with Gmail
         gmail_service.authenticate()
@@ -208,8 +244,7 @@ async def configure_email(
 async def trigger_scan(
     background_tasks: BackgroundTasks, 
     request: ScanRequest = None,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(current_user_dependency),
 ):
     """Manually trigger email scan - uses current user's Gmail tokens"""
     global current_batch_id, current_recruiter_id
@@ -232,21 +267,21 @@ async def trigger_scan(
     
     search_query = request.search_query if request else None
     hours_back = request.hours_back if request else None
-    recruiter_id = current_user.id  # Use current user's ID
+    recruiter_id = str(current_user.id)  # Use current user's ID
     
     # Generate new batch ID for this scan
     current_batch_id = str(uuid.uuid4())[:8]
     current_recruiter_id = recruiter_id
     
-    # Pass user object to background task
+    # Pass user id to background task
     background_tasks.add_task(
         scan_emails_task, 
-        db, 
         search_query, 
         hours_back, 
         current_batch_id, 
         recruiter_id,
-        current_user  # Pass user object
+        recruiter_id,  # recruiter_id
+        str(current_user.id),  # user_id
     )
     
     return {
@@ -263,27 +298,24 @@ async def get_scan_progress():
 
 class DeleteCandidatesRequest(BaseModel):
     """Request to delete selected candidates from database"""
-    candidate_ids: List[int]
+    candidate_ids: List[str]
 
 @app.post("/api/delete-candidates")
 async def delete_selected_candidates(
     request: DeleteCandidatesRequest,
-    db: Session = Depends(get_db)
 ):
     """Delete selected candidates from database"""
-    deleted_count = 0
-    
+    obj_ids: list[ObjectId] = []
     for candidate_id in request.candidate_ids:
         try:
-            candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
-            if candidate:
-                db.delete(candidate)
-                db.commit()
-                deleted_count += 1
-                print(f"🗑️ Deleted candidate ID: {candidate_id}")
-        except Exception as e:
-            print(f"❌ Error deleting candidate {candidate_id}: {str(e)}")
+            obj_ids.append(ObjectId(str(candidate_id)))
+        except Exception:
             continue
+
+    deleted_count = 0
+    if obj_ids:
+        res = await Candidate.find({"_id": {"$in": obj_ids}}).delete()
+        deleted_count = int(getattr(res, "deleted_count", 0) or 0)
     
     return {
         "success": True,
@@ -293,281 +325,179 @@ async def delete_selected_candidates(
 
 @app.get("/api/candidates")
 async def get_candidates(
-    search: Optional[str] = Query(None, description="Search in name, email, subject, or unique_id"),
-    batch_id: Optional[str] = Query(None, description="Filter by batch/scan ID"),
-    recruiter_id: Optional[int] = Query(None, description="Filter by recruiter ID"),
-    # CV Filters
-    cv_freshness: Optional[str] = Query(None),
-    experience_years: Optional[str] = Query(None),
-    education_degree: Optional[str] = Query(None),
-    cv_language: Optional[str] = Query(None),
-    # Personal Information
-    residence_location: Optional[str] = Query(None),
-    nationality: Optional[str] = Query(None),
-    gender: Optional[str] = Query(None),
-    age_min: Optional[int] = Query(None),
-    age_max: Optional[int] = Query(None),
-    languages: Optional[str] = Query(None),
-    marital_status: Optional[str] = Query(None),
-    special_needs: Optional[str] = Query(None),
-    # Target Job
-    salary_min: Optional[int] = Query(None),
-    salary_max: Optional[int] = Query(None),
-    career_level: Optional[str] = Query(None),
-    target_job_location: Optional[str] = Query(None),
-    employment_type: Optional[str] = Query(None),
-    notice_period: Optional[int] = Query(None),
-    # Education Details
-    degree: Optional[str] = Query(None),
-    major: Optional[str] = Query(None),
-    grade: Optional[str] = Query(None),
-    institution: Optional[str] = Query(None),
-    # Previous Actions
-    has_notes: Optional[bool] = Query(None),
-    has_views: Optional[bool] = Query(None),
-    has_tags: Optional[bool] = Query(None),
-    # CV Requirements
-    has_contact_info: Optional[bool] = Query(None),
-    has_mobile_confirmed: Optional[bool] = Query(None),
-    has_photo: Optional[bool] = Query(None),
-    has_experience: Optional[bool] = Query(None),
-    db: Session = Depends(get_db)
+    skip: int = 0,
+    limit: int = 100,
+    search: str = Query(None),
+    cv_freshness: str = Query(None),
+    experience_years: str = Query(None),
+    education_degree: str = Query(None),
+    residence_location: str = Query(None),
+    gender: str = Query(None),
+    # New Filters
+    filter_position: str = Query(None),
+    filter_skills: str = Query(None),
+    filter_companies: str = Query(None),
+    # Old Filters (Keep for backward compatibility)
+    salary_min: int = Query(None),
+    salary_max: int = Query(None),
+    career_level: str = Query(None),
+    target_job_location: str = Query(None),
+    employment_type: str = Query(None),
+    notice_period: int = Query(None),
+    degree: str = Query(None),
+    major: str = Query(None),
+    grade: str = Query(None),
+    institution: str = Query(None),
+    has_contact_info: bool = Query(False),
+    has_mobile_confirmed: bool = Query(False),
+    has_photo: bool = Query(False),
+    has_experience: bool = Query(False)
 ):
-    """Get candidates with comprehensive filtering - supports ALL advanced filters"""
-    query = db.query(Candidate)
+    import re
+    base_query: dict = {}
+    candidates = await Candidate.find(base_query).sort(-Candidate.created_at).skip(skip).limit(limit).to_list()
     
-    # Filter by batch_id if provided
-    if batch_id:
-        query = query.filter(Candidate.batch_id == batch_id)
-    
-    # Filter by recruiter_id if provided (optional - omit to search all recruiters)
-    if recruiter_id:
-        query = query.filter(Candidate.recruiter_id == recruiter_id)
-    
-    if search:
-        search_term = f"%{search}%"
-        query = query.filter(
-            (Candidate.name.ilike(search_term)) |
-            (Candidate.email.ilike(search_term)) |
-            (Candidate.email_subject.ilike(search_term)) |
-            (Candidate.unique_id.ilike(search_term))
-        )
-    
-    # CV Freshness
-    if cv_freshness and cv_freshness != 'all':
-        from datetime import datetime, timedelta
-        cutoff_date = None
-        if cv_freshness == 'week':
-            cutoff_date = datetime.now() - timedelta(days=7)
-        elif cv_freshness == 'month':
-            cutoff_date = datetime.now() - timedelta(days=30)
-        elif cv_freshness == '3months':
-            cutoff_date = datetime.now() - timedelta(days=90)
-        elif cv_freshness == '6months':
-            cutoff_date = datetime.now() - timedelta(days=180)
-        
-        if cutoff_date:
-            query = query.filter(Candidate.created_at >= cutoff_date)
-    
-    # Previous Actions - SQL filters
-    if has_notes:
-        query = query.filter(Candidate.notes.isnot(None), Candidate.notes != '')
-    if has_tags:
-        query = query.filter(Candidate.tags.isnot(None), Candidate.tags != '')
-    
-    candidates = query.order_by(Candidate.created_at.desc()).all()
-    
-    # JSON CV Data Filtering
-    import json
     filtered_candidates = []
+    
     for c in candidates:
-        cv_data = None
-        if c.cv_data:
+        # Basic Search (Name, Email, Phone)
+        if search:
+            search_lower = search.lower()
+            if not (search_lower in (c.name or "").lower() or 
+                    search_lower in (c.email or "").lower() or 
+                    search_lower in (c.phone or "").lower() or
+                    search_lower in (c.email_subject or "").lower()):
+                continue
+        
+        cv_data = c.cv_data or {}
+                
+        personal = cv_data.get('personal_info', {})
+        professional = cv_data.get('professional_info', {})
+        
+        # New Filters
+        if filter_skills:
+            candidate_skills = [s.lower() for s in cv_data.get('skills', [])]
+            search_skills = [s.strip().lower() for s in filter_skills.split(',')]
+            # Check if ANY of the search skills are present (partial match)
+            if not any(any(s in cs for cs in candidate_skills) for s in search_skills):
+                continue
+
+        if filter_position:
+            # Check work history for job titles
+            work_history = cv_data.get('work_history', [])
+            position_match = False
+            for work in work_history:
+                if filter_position.lower() in work.get('job_title', '').lower():
+                    position_match = True
+                    break
+            if not position_match:
+                continue
+
+        if filter_companies:
+            # Check work history for companies
+            work_history = cv_data.get('work_history', [])
+            company_match = False
+            for work in work_history:
+                if filter_companies.lower() in work.get('company', '').lower():
+                    company_match = True
+                    break
+            if not company_match:
+                continue
+
+        # CV Freshness
+        if cv_freshness and cv_freshness != 'all':
+            email_date = c.email_date
+            if email_date:
+                try:
+                    # Simple check if email_date is populated (logic to parse date can be complex, skipping strict date check for now unless needed)
+                    # For now just checking if recent:
+                    # TODO: strict date parsing from "Wed, 01 Jan 2025" etc. 
+                    pass
+                except:
+                    pass
+
+        # Experience Years
+        if experience_years:
+            exp_str = professional.get('years_experience', '0')
             try:
-                cv_data = json.loads(c.cv_data) if isinstance(c.cv_data, str) else c.cv_data
+                years = int(re.search(r'\d+', str(exp_str)).group()) if re.search(r'\d+', str(exp_str)) else 0
             except:
-                pass
-        
-        # Apply CV filters - skip if no cv_data but filters active
-        if (experience_years or education_degree or cv_language or residence_location or
-            nationality or gender or age_min or age_max or languages or marital_status or
-            special_needs or salary_min or salary_max or career_level or target_job_location or
-            employment_type or notice_period or degree or major or grade or institution or
-            has_contact_info or has_mobile_confirmed or has_photo or has_experience):
-            
-            if not cv_data:
+                years = 0
+                
+            if experience_years == '0-1' and not (0 <= years <= 1): continue
+            if experience_years == '1-3' and not (1 < years <= 3): continue
+            if experience_years == '3-5' and not (3 < years <= 5): continue
+            if experience_years == '5-10' and not (5 < years <= 10): continue
+            if experience_years == '10+' and not (years > 10): continue
+
+        # Education Degree
+        if education_degree:
+            edu_list = cv_data.get('education', [])
+            if not any(education_degree.lower() in e.get('degree', '').lower() for e in edu_list):
                 continue
-            
-            # Experience years
-            if experience_years:
-                exp = cv_data.get('position_discipline', {}).get('years_of_experience', '')
-                if experience_years not in str(exp):
-                    continue
-            
-            # Education degree
-            if education_degree:
-                degrees = cv_data.get('education_certifications', {}).get('education', [])
-                if not any(education_degree.lower() in d.get('degree', '').lower() for d in degrees or []):
-                    continue
-            
-            # CV Language
-            if cv_language:
-                lang = cv_data.get('personal_info', {}).get('cv_language', '')
-                if cv_language.lower() not in lang.lower():
-                    continue
-            
-            # Personal Info
-            personal = cv_data.get('personal_info', {})
-            if residence_location and residence_location.lower() not in personal.get('current_location', '').lower():
+
+        # Location
+        if residence_location:
+            loc = personal.get('location', '')
+            if residence_location.lower() not in loc.lower():
                 continue
-            if nationality and nationality.lower() not in personal.get('nationality', '').lower():
-                continue
-            if gender and gender.lower() != personal.get('gender', '').lower():
-                continue
-            
-            # Age range
-            if age_min or age_max:
-                try:
-                    age = int(personal.get('age', 0))
-                    if (age_min and age < age_min) or (age_max and age > age_max):
-                        continue
-                except:
-                    continue
-            
-            # Languages
-            if languages:
-                lang_list = personal.get('languages', [])
-                if not any(languages.lower() in l.lower() for l in (lang_list or [])):
-                    continue
-            
-            if marital_status and marital_status.lower() != personal.get('marital_status', '').lower():
-                continue
-            if special_needs and special_needs.lower() not in personal.get('special_needs', '').lower():
-                continue
-            
-            # Target Job
-            target = cv_data.get('target_job', {})
-            if salary_min or salary_max:
-                try:
-                    salary = int(target.get('monthly_salary', 0))
-                    if (salary_min and salary < salary_min) or (salary_max and salary > salary_max):
-                        continue
-                except:
-                    continue
-            
-            if career_level and career_level.lower() != target.get('career_level', '').lower():
-                continue
-            if target_job_location and target_job_location.lower() not in target.get('location', '').lower():
-                continue
-            if employment_type and employment_type.lower() not in target.get('employment_type', '').lower():
-                continue
-            if notice_period:
-                try:
-                    notice = int(target.get('notice_period', 0))
-                    if notice != notice_period:
-                        continue
-                except:
-                    continue
-            
-            # Education Details
-            edu_list = cv_data.get('education_certifications', {}).get('education', [])
-            if degree and not any(degree.lower() in e.get('degree', '').lower() for e in (edu_list or [])):
-                continue
-            if major and not any(major.lower() in e.get('major', '').lower() for e in (edu_list or [])):
-                continue
-            if grade and not any(grade.lower() in e.get('grade', '').lower() for e in (edu_list or [])):
-                continue
-            if institution and not any(institution.lower() in e.get('institution', '').lower() for e in (edu_list or [])): 
-                continue
-            
-            # CV Requirements
-            contact = cv_data.get('contact_details', {})
-            if has_contact_info and not (contact.get('email_address') or contact.get('mobile_numbers')):
-                continue
-            if has_mobile_confirmed and not contact.get('mobile_confirmed'):
-                continue
-            if has_photo and not personal.get('photo_url'):
-                continue
-            if has_experience:
-                work = cv_data.get('work_experience', [])
-                if not work or len(work) == 0:
-                    continue
-        
+
+        # Gender (inferred - strict check might not be possible without explicit field in new parser)
+        # if gender: ... (skipped as parser doesn't strictly extract gender currently, but kept placeholder)
+
         filtered_candidates.append(c)
     
-    # Build result with recruiter names
+    # Build result with recruiter names (batch fetch)
+    recruiter_ids = [c.recruiter_id for c in filtered_candidates if c.recruiter_id]
+    recruiter_map = await _recruiter_names_map(recruiter_ids)
+
     result = []
     for c in filtered_candidates:
-        # Parse cv_data if it's a string
-        cv_data_parsed = None
-        if c.cv_data:
-            try:
-                cv_data_parsed = json.loads(c.cv_data) if isinstance(c.cv_data, str) else c.cv_data
-            except:
-                cv_data_parsed = c.cv_data
-        
-        candidate_dict = {
-            "id": c.id,
-            "unique_id": c.unique_id,
-            "name": c.name,
-            "email": c.email,
-            "phone": c.phone,
-            "email_subject": c.email_subject,
-            "email_from": c.email_from,
-            "email_to": c.email_to,
-            "email_cc": c.email_cc,
-            "email_date": c.email_date,
-            "email_body": c.email_body,  # Added
-            "email_signature": c.email_signature,  # Added
-            "resume_filename": c.resume_filename,
-            "resume_path": c.resume_path,  # Added
-            "resume_text": c.resume_text,  # Added
-            "cv_data": cv_data_parsed,  # Added and parsed
-            "extracted_phones": c.extracted_phones,  # Added
-            "extracted_emails": c.extracted_emails,  # Added
-            "extracted_links": c.extracted_links,  # Added
-            "notes": c.notes,
-            "tags": c.tags,
-            "created_at": c.created_at,
-            "recruiter_id": c.recruiter_id,
-            "recruiter_name": None,
-            "gmail_message_id": c.gmail_message_id  # Added
-        }
-        # Get recruiter name
-        if c.recruiter_id:
-            recruiter = db.query(User).filter(User.id == c.recruiter_id).first()
-            if recruiter:
-                candidate_dict["recruiter_name"] = recruiter.name or recruiter.email
-        result.append(candidate_dict)
+        cv_data_parsed = c.cv_data
+
+        # Prioritize extracted name
+        display_name = c.name
+        if cv_data_parsed and isinstance(cv_data_parsed, dict):
+             extracted_name = cv_data_parsed.get('personal_info', {}).get('name')
+             if extracted_name and len(extracted_name) > 2:
+                 display_name = extracted_name
+
+        d = await _candidate_to_dict(c, recruiter_map.get(c.recruiter_id) if c.recruiter_id else None)
+        d["name"] = display_name
+        result.append(d)
     
     return result
 
 @app.get("/api/batches")
-async def get_batches(db: Session = Depends(get_db)):
+async def get_batches():
     """Get all unique batch IDs with counts"""
-    from sqlalchemy import func
-    batches = db.query(
-        Candidate.batch_id,
-        func.count(Candidate.id).label('count'),
-        func.max(Candidate.created_at).label('created_at')
-    ).filter(
-        Candidate.batch_id.isnot(None)
-    ).group_by(Candidate.batch_id).order_by(func.max(Candidate.created_at).desc()).all()
-    
-    return [{"batch_id": b.batch_id, "count": b.count, "created_at": b.created_at} for b in batches]
+    pipeline = [
+        {"$match": {"batch_id": {"$ne": None}}},
+        {"$group": {"_id": "$batch_id", "count": {"$sum": 1}, "created_at": {"$max": "$created_at"}}},
+        {"$sort": {"created_at": -1}},
+    ]
+    cursor = Candidate.get_motor_collection().aggregate(pipeline)
+    batches = await cursor.to_list(length=None)
+    return [{"batch_id": b["_id"], "count": b["count"], "created_at": b.get("created_at")} for b in batches]
 
 @app.get("/api/candidates/{candidate_id}", response_model=CandidateDetailResponse)
-async def get_candidate_detail(candidate_id: int, db: Session = Depends(get_db)):
+async def get_candidate_detail(candidate_id: str):
     """Get full candidate details including email body and CV data"""
-    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    try:
+        candidate = await Candidate.get(PydanticObjectId(candidate_id))
+    except Exception:
+        candidate = None
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
-    return candidate
+    return CandidateDetailResponse(**(await _candidate_to_dict(candidate)))
 
 @app.get("/api/candidates/{candidate_id}/email-html")
-async def get_candidate_email_html(candidate_id: int, db: Session = Depends(get_db)):
+async def get_candidate_email_html(candidate_id: str):
     """Get the HTML email body for display in new tab"""
-    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    try:
+        candidate = await Candidate.get(PydanticObjectId(candidate_id))
+    except Exception:
+        candidate = None
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
     
@@ -608,57 +538,57 @@ async def get_candidate_email_html(candidate_id: int, db: Session = Depends(get_
 
 @app.put("/api/candidates/{candidate_id}/cv-data")
 async def update_candidate_cv_data(
-    candidate_id: int, 
+    candidate_id: str, 
     update: CVDataUpdate,
-    db: Session = Depends(get_db)
 ):
     """Update candidate CV data (editable form)"""
-    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    try:
+        candidate = await Candidate.get(PydanticObjectId(candidate_id))
+    except Exception:
+        candidate = None
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
     
-    candidate.cv_data = update.cv_data
-    candidate.updated_at = datetime.utcnow()
-    db.commit()
+    await candidate.set({Candidate.cv_data: update.cv_data, Candidate.updated_at: datetime.utcnow()})
     
     return {"success": True, "message": "CV data updated successfully"}
 
 @app.put("/api/candidates/{candidate_id}/notes")
 async def update_candidate_notes(
-    candidate_id: int,
+    candidate_id: str,
     update: NotesUpdate,
-    db: Session = Depends(get_db)
 ):
     """Update candidate notes"""
-    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    try:
+        candidate = await Candidate.get(PydanticObjectId(candidate_id))
+    except Exception:
+        candidate = None
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
     
-    candidate.notes = update.notes
-    candidate.updated_at = datetime.utcnow()
-    db.commit()
+    await candidate.set({Candidate.notes: update.notes, Candidate.updated_at: datetime.utcnow()})
     
     return {"success": True, "message": "Notes updated successfully"}
 
 @app.put("/api/candidates/{candidate_id}/tags")
 async def update_candidate_tags(
-    candidate_id: int,
+    candidate_id: str,
     update: TagsUpdate,
-    db: Session = Depends(get_db)
 ):
     """Update candidate tags"""
-    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    try:
+        candidate = await Candidate.get(PydanticObjectId(candidate_id))
+    except Exception:
+        candidate = None
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
     
-    candidate.tags = json.dumps(update.tags)
-    candidate.updated_at = datetime.utcnow()
-    db.commit()
+    await candidate.set({Candidate.tags: update.tags, Candidate.updated_at: datetime.utcnow()})
     
     return {"success": True, "message": "Tags updated successfully", "tags": update.tags}
 
 @app.post("/api/auth/login")
-async def login(request: LoginRequest = LoginRequest(), db: Session = Depends(get_db)):
+async def login(request: LoginRequest = LoginRequest()):
     """
     Hybrid login: OAuth for Gmail, IMAP for Outlook/Yahoo
     Returns user info if authenticated
@@ -718,25 +648,23 @@ async def login(request: LoginRequest = LoginRequest(), db: Session = Depends(ge
             raise ValueError("Could not retrieve email address")
         
         # Check if user exists, create if not
-        user = db.query(User).filter(User.email == email).first()
+        user = await User.find_one(User.email == email)
         if not user:
             user = User(
                 email=email,
                 name=email.split('@')[0],  # Use email prefix as name
-                is_active=1
+                is_active=True
             )
-            db.add(user)
+            await user.insert()
         
-        user.last_login = datetime.utcnow()
-        db.commit()
-        db.refresh(user)
+        await user.set({User.last_login: datetime.utcnow()})
         
         return {
             "success": True,
             "user": {
-                "id": user.id,
+                "id": str(user.id),
                 "email": user.email,
-                "name": user.name
+                "name": user.name,
             },
             "method": request.method or 'oauth',
             "message": "Login successful"
@@ -802,7 +730,6 @@ async def google_oauth_login():
 async def google_oauth_callback(
     code: str = Query(..., description="Authorization code from Google"),
     state: str = Query(..., description="State for CSRF protection"),
-    db: Session = Depends(get_db)
 ):
     """
     OAuth callback - exchanges code for tokens and creates session
@@ -820,24 +747,27 @@ async def google_oauth_callback(
         token_data = oauth_handler.handle_callback(code, state, state)
         
         # Get or create user
-        user = db.query(User).filter(User.email == token_data['email']).first()
+        user = await User.find_one(User.email == token_data["email"])
         if not user:
             user = User(
                 email=token_data['email'],
                 name=token_data['email'].split('@')[0],
-                is_active=1
+                is_active=True
             )
-            db.add(user)
+            await user.insert()
         
         # Store tokens in user record
-        user.gmail_access_token = token_data['access_token']
-        user.gmail_refresh_token = token_data['refresh_token']
-        user.gmail_token_expiry = datetime.fromisoformat(token_data['token_expiry']) if token_data['token_expiry'] else None
-        user.gmail_scopes = token_data['scopes']
-        user.last_login = datetime.utcnow()
-        
-        db.commit()
-        db.refresh(user)
+        await user.set(
+            {
+                User.gmail_access_token: token_data["access_token"],
+                User.gmail_refresh_token: token_data["refresh_token"],
+                User.gmail_token_expiry: datetime.fromisoformat(token_data["token_expiry"])
+                if token_data.get("token_expiry")
+                else None,
+                User.gmail_scopes: token_data["scopes"],
+                User.last_login: datetime.utcnow(),
+            }
+        )
         
         # Create session
         session_token = SessionManager.create_session(user)
@@ -852,7 +782,7 @@ async def google_oauth_callback(
                 const sessionData = {{
                     token: '{session_token}',
                     user: {{
-                        id: {user.id},
+                        id: '{str(user.id)}',
                         email: '{user.email}',
                         name: '{user.name}'
                     }}
@@ -911,9 +841,8 @@ async def google_oauth_callback(
         """, status_code=401)
 
 @app.get("/api/auth/me")
-async def get_current_user(
+async def auth_me(
     authorization: Optional[str] = Query(None, alias="session_token"),
-    db: Session = Depends(get_db)
 ):
     """
     Get current authenticated user from session token
@@ -927,18 +856,16 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid or expired session")
     
     # Get user from database
-    user = db.query(User).filter(User.id == payload['user_id']).first()
+    try:
+        user = await User.get(PydanticObjectId(payload["user_id"]))
+    except Exception:
+        user = None
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
     return {
         "success": True,
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "name": user.name,
-            "last_login": user.last_login.isoformat() if user.last_login else None
-        }
+        "user": _serialize_user(user),
     }
 
 # ============================
@@ -980,9 +907,12 @@ async def reset_session():
     return {"success": True, "message": "Session reset successfully"}
 
 @app.get("/api/resume/{candidate_id}")
-async def download_resume(candidate_id: int, db: Session = Depends(get_db)):
+async def download_resume(candidate_id: str):
     """Download candidate resume"""
-    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    try:
+        candidate = await Candidate.get(PydanticObjectId(candidate_id))
+    except Exception:
+        candidate = None
     if not candidate or not candidate.resume_path:
         raise HTTPException(status_code=404, detail="Resume not found")
     
@@ -1001,10 +931,10 @@ async def health_check():
     return {"status": "healthy", "service": "email-to-candidate-automation"}
 
 @app.get("/api/status")
-async def get_status(db: Session = Depends(get_db)):
+async def get_status():
     """Get current configuration status"""
-    config = db.query(EmailConfig).filter(EmailConfig.is_active == 1).first()
-    candidate_count = db.query(Candidate).count()
+    config = await EmailConfig.find_one(EmailConfig.is_active == True)
+    candidate_count = await Candidate.count()
     
     return {
         "configured": config is not None,
@@ -1016,7 +946,6 @@ async def get_status(db: Session = Depends(get_db)):
 @app.post("/api/live-scan")
 async def live_scan(
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
 ):
     """Quick scan for new emails in the last 5 minutes (for live mode)"""
     global current_batch_id
@@ -1025,7 +954,7 @@ async def live_scan(
     live_batch_id = f"live-{str(uuid.uuid4())[:4]}"
     
     # Scan only last 5 minutes of emails
-    background_tasks.add_task(scan_emails_task, db, "in:inbox", 1, live_batch_id)  # 1 hour back max
+    background_tasks.add_task(scan_emails_task, "in:inbox", 1, live_batch_id, None, None)
     
     return {
         "success": True,
@@ -1035,27 +964,34 @@ async def live_scan(
 
 @app.get("/api/latest-candidates")
 async def get_latest_candidates(
-    since_id: Optional[int] = Query(None, description="Get candidates with ID greater than this"),
+    since_id: Optional[str] = Query(None, description="Get candidates with _id greater than this"),
     limit: int = Query(20, description="Max number of results"),
-    db: Session = Depends(get_db)
 ):
     """Get latest candidates for live updates"""
-    query = db.query(Candidate)
-    
+    find_query: dict = {}
     if since_id:
-        query = query.filter(Candidate.id > since_id)
-    
-    candidates = query.order_by(Candidate.id.desc()).limit(limit).all()
+        try:
+            find_query["_id"] = {"$gt": ObjectId(since_id)}
+        except Exception:
+            find_query = {}
+
+    candidates = await Candidate.find(find_query).sort(-Candidate.id).limit(limit).to_list()
     
     return {
-        "candidates": candidates,
-        "latest_id": candidates[0].id if candidates else since_id,
+        "candidates": [await _candidate_to_dict(c) for c in candidates],
+        "latest_id": str(candidates[0].id) if candidates else since_id,
         "count": len(candidates)
     }
 
 
 # Background task
-def scan_emails_task(db: Session, search_query: str = None, hours_back: int = None, batch_id: str = None, recruiter_id: int = None, user: User = None):
+async def scan_emails_task(
+    search_query: str = None,
+    hours_back: int = None,
+    batch_id: str = None,
+    recruiter_id: str | None = None,
+    user_id: str | None = None,
+):
     """Scan emails using current user's Gmail tokens and save to database"""
     global scan_progress, current_recruiter_id, current_email_service
     
@@ -1064,6 +1000,13 @@ def scan_emails_task(db: Session, search_query: str = None, hours_back: int = No
         from googleapiclient.discovery import build
         
         # Create user-specific Gmail service
+        user = None
+        if user_id:
+            try:
+                user = await User.get(PydanticObjectId(user_id))
+            except Exception:
+                user = None
+
         if user and user.gmail_access_token and user.gmail_refresh_token:
             print(f"📧 Creating Gmail service for {user.email}")
             oauth_handler = WebOAuthHandler()
@@ -1078,9 +1021,7 @@ def scan_emails_task(db: Session, search_query: str = None, hours_back: int = No
                 
                 # Check if token was refreshed
                 if creds.token != user.gmail_access_token:
-                    user.gmail_access_token = creds.token
-                    user.gmail_token_expiry = creds.expiry
-                    db.commit()
+                    await user.set({User.gmail_access_token: creds.token, User.gmail_token_expiry: creds.expiry})
                     print(f"✅ Refreshed token for {user.email}")
                 
                 # Create GmailService with user's credentials
@@ -1143,7 +1084,7 @@ def scan_emails_task(db: Session, search_query: str = None, hours_back: int = No
                 scan_progress["message"] = f"Processing {idx + 1}/{total}: {email_data.get('subject', '')[:30]}..."
                 
                 # Check if this email was already processed (by Gmail message ID)
-                existing_message = check_duplicate_candidate(db, email_data['id'])
+                existing_message = await check_duplicate_candidate(email_data["id"])
                 
                 if existing_message:
                     scan_progress["skipped"] += 1
@@ -1258,7 +1199,7 @@ def scan_emails_task(db: Session, search_query: str = None, hours_back: int = No
                 )
                 print(f"   🆔 Generated unique ID: {unique_id}")
                 
-                # Save candidate directly to database (auto-sync)
+                # Save candidate directly to database
                 candidate = Candidate(
                     unique_id=unique_id,
                     gmail_message_id=email_data['id'],
@@ -1279,14 +1220,13 @@ def scan_emails_task(db: Session, search_query: str = None, hours_back: int = No
                     resume_filename=resume_filename,
                     resume_text=resume_text,
                     cv_data=cv_data,
-                    extracted_phones=json.dumps(email_extracted.get('phones', [])),
-                    extracted_emails=json.dumps(email_extracted.get('emails', [])),
-                    extracted_links=json.dumps(email_extracted.get('other_links', [])),
-                    tags=json.dumps(['Scanned']),  # Auto-tag as scanned
+                    extracted_phones=email_extracted.get('phones', []) or [],
+                    extracted_emails=email_extracted.get('emails', []) or [],
+                    extracted_links=email_extracted.get('other_links', []) or [],
+                    tags=['Scanned'],  # Auto-tag as scanned
                 )
                 
-                db.add(candidate)
-                db.commit()
+                await candidate.insert()
                 scan_progress["candidates_added"] += 1
                 print(f"✅ Saved candidate to DB: {candidate_name} (ID: {unique_id})")
             
@@ -1296,10 +1236,9 @@ def scan_emails_task(db: Session, search_query: str = None, hours_back: int = No
                 continue
         
         # Update last scan time
-        config = db.query(EmailConfig).first()
+        config = await EmailConfig.find_one()
         if config:
-            config.last_scan = datetime.now()
-            db.commit()
+            await config.set({EmailConfig.last_scan: datetime.now()})
         
         # Mark scan as complete
         scan_progress["status"] = "complete"

@@ -19,6 +19,14 @@ export default function TabbedSidebar({
     setResidenceLocation,
     gender, 
     setGender,
+    // New Filters
+    filterPosition,
+    setFilterPosition,
+    filterSkills,
+    setFilterSkills,
+    filterCompanies,
+    setFilterCompanies,
+    
     selectedKeyword,
     setSelectedKeyword,
     customKeyword,
@@ -120,7 +128,7 @@ export default function TabbedSidebar({
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
                             >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7 7" />
                             </svg>
                         </button>
 
@@ -130,6 +138,48 @@ export default function TabbedSidebar({
                                 <h3 className="font-semibold text-gray-900 text-sm border-b border-gray-200 pb-2">
                                     Filter Candidates
                                 </h3>
+
+                                {/* Position Filter */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Position / Job Title
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={filterPosition}
+                                        onChange={(e) => setFilterPosition(e.target.value)}
+                                        placeholder="e.g. Developer, Manager"
+                                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                    />
+                                </div>
+
+                                {/* Skills Filter */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Skills
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={filterSkills}
+                                        onChange={(e) => setFilterSkills(e.target.value)}
+                                        placeholder="e.g. Python, React, Sales"
+                                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                    />
+                                </div>
+
+                                {/* Companies Filter */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Companies
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={filterCompanies}
+                                        onChange={(e) => setFilterCompanies(e.target.value)}
+                                        placeholder="e.g. Google, Microsoft"
+                                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                    />
+                                </div>
 
                                 {/* CV Freshness */}
                                 <div>
@@ -234,12 +284,16 @@ export default function TabbedSidebar({
                                         setEducationDegree('')
                                         setResidenceLocation('')
                                         setGender('')
+                                        setFilterPosition('')
+                                        setFilterSkills('')
+                                        setFilterCompanies('')
                                         fetchCandidates()
                                     }}
                                     className="w-full px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium text-sm transition-colors"
                                 >
                                     Clear All Filters
                                 </button>
+
 
                                 {/* Apply Filters Button */}
                                 <button

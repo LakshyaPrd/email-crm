@@ -438,6 +438,48 @@ class ResumeParser:
 
         return ""
 
+    def extract_summary(self, text: str) -> str:
+        """Extract professional summary (usually the first paragraph)"""
+        if not text:
+            return ""
+            
+        lines = text.split('\n')
+        summary_lines = []
+        capture = False
+        
+        # Keywords that start the summary section
+        summary_headers = ['summary', 'profile', 'professional summary', 'objective', 'about me', 'executive summary']
+        
+        # Scan for header
+        for i, line in enumerate(lines[:30]):  # Check first 30 lines
+            line_lower = line.strip().lower()
+            
+            # Found header
+            if any(header in line_lower for header in summary_headers) and len(line_lower) < 30:
+                capture = True
+                continue
+                
+            # Stop capturing if we hit another section
+            if capture:
+                # Key sections that end the summary
+                if any(k in line_lower for k in ['experience', 'education', 'skills', 'projects', 'certifications', 'languages']):
+                    break
+                
+                # If line is not empty, add it
+                if line.strip():
+                    summary_lines.append(line.strip())
+                    
+                # Limit summary length (e.g., 5-6 lines max)
+                if len(summary_lines) > 8:
+                    break
+        
+        # If no explicit header found, try to guess (first block of text after header)
+        if not summary_lines:
+            # Skip potential name/contact info (heuristic: skip first 5-10 non-empty lines if short)
+             pass 
+
+        return ' '.join(summary_lines)
+
     def parse(self, resume_text: str) -> Dict:
         """
         Main parsing method - returns structured resume data
@@ -462,6 +504,7 @@ class ResumeParser:
         skills = self.extract_skills(text)
         work_history = self.extract_work_experience(text)
         certifications = self.extract_certifications(text)
+        summary = self.extract_summary(text)  # Added summary extraction
 
         # Extract DOB
         dob_match = re.search(r'(?:DOB|Date of Birth|Born)[:\s]*(\d{1,2}/\d{1,2}/\d{4})', text, re.IGNORECASE)
@@ -491,6 +534,7 @@ class ResumeParser:
                 'github': github,
                 'dob': dob,
                 'location': location,
+                'summary': summary, # Added summary
             },
             'professional_info': {
                 'years_experience': years_experience,

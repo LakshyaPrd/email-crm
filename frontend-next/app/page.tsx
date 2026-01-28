@@ -93,14 +93,21 @@ export default function Home() {
     const [specialNeeds, setSpecialNeeds] = useState('')
     
     // Target Job Filters
+    // Target Job Filters
     const [salaryMin, setSalaryMin] = useState('')
     const [salaryMax, setSalaryMax] = useState('')
     const [careerLevel, setCareerLevel] = useState('')
     const [targetJobLocation, setTargetJobLocation] = useState('')
     const [employmentType, setEmploymentType] = useState('')
     const [noticePeriod, setNoticePeriod] = useState('')
+
+    // New Filters (Position, Skills, Companies)
+    const [filterPosition, setFilterPosition] = useState('')
+    const [filterSkills, setFilterSkills] = useState('')
+    const [filterCompanies, setFilterCompanies] = useState('')
     
     // Education Filters
+
     const [degree, setDegree] = useState('')
     const [major, setMajor] = useState('')
     const [grade, setGrade] = useState('')
@@ -922,16 +929,14 @@ export default function Home() {
                     setNationality={setNationality}
                     gender={gender}
                     setGender={setGender}
-                    ageMin={ageMin}
-                    setAgeMin={setAgeMin}
-                    ageMax={ageMax}
-                    setAgeMax={setAgeMax}
-                    languages={languages}
-                    setLanguages={setLanguages}
-                    maritalStatus={maritalStatus}
-                    setMaritalStatus={setMaritalStatus}
-                    specialNeeds={specialNeeds}
-                    setSpecialNeeds={setSpecialNeeds}
+                    // New Filters
+                    filterPosition={filterPosition}
+                    setFilterPosition={setFilterPosition}
+                    filterSkills={filterSkills}
+                    setFilterSkills={setFilterSkills}
+                    filterCompanies={filterCompanies}
+                    setFilterCompanies={setFilterCompanies}
+
                     // Target Job Filters
                     salaryMin={salaryMin}
                     setSalaryMin={setSalaryMin}
