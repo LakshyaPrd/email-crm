@@ -95,7 +95,7 @@ class EmailConfigRequest(BaseModel):
 class ScanRequest(BaseModel):
     search_query: Optional[str] = None
     hours_back: Optional[int] = None
-    recruiter_id: Optional[int] = None  # Who is performing the scan
+    recruiter_id: Optional[str] = None  # Who is performing the scan (Allow int or str)
 
 class CVDataUpdate(BaseModel):
     cv_data: dict
