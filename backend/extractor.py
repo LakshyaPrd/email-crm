@@ -209,39 +209,41 @@ class ResumeParser:
         """Extract education details with degree, major, institution, year, CGPA"""
         educations = []
 
-        # Degree patterns that capture: degree, major, institution, year, CGPA
+        # Degree patterns that capture: degree, major
+        # Institution pattern is now separate/generic
         degree_patterns = [
             # Bachelor of Engineering / B.E.
-            (r'(B\.E\.|Bachelor\s+of\s+Engineering)(?:[,\s]+in)?[,\s]+(\w+(?:\s+\w+){0,3})',
-             r'([A-Z][^\n]{10,100}?(?:University|College|Institute|Technology|School))',
-             r'(\d{4})',
-             r'CGPA[:\s]+(\d+\.\d+(?:/\d+)?)'),
+            (r'(B\.E\.|Bachelor\s+of\s+Engineering)(?:[,\s]+in)?[,\s]+(\w+(?:\s+\w+){0,3})'),
 
             # Bachelor of Technology / B.Tech
-            (r'(B\.Tech|Bachelor\s+of\s+Technology)(?:[,\s]+in)?[,\s]+(\w+(?:\s+\w+){0,3})',
-             r'([A-Z][^\n]{10,100}?(?:University|College|Institute|Technology|School))',
-             r'(\d{4})',
-             r'CGPA[:\s]+(\d+\.\d+(?:/\d+)?)'),
+            (r'(B\.Tech|Bachelor\s+of\s+Technology)(?:[,\s]+in)?[,\s]+(\w+(?:\s+\w+){0,3})'),
 
             # Master's degrees
-            (r'(M\.Tech|M\.E\.|Master\s+of\s+(?:Technology|Engineering))(?:[,\s]+in)?[,\s]+(\w+(?:\s+\w+){0,3})',
-             r'([A-Z][^\n]{10,100}?(?:University|College|Institute|Technology|School))',
-             r'(\d{4})',
-             r'CGPA[:\s]+(\d+\.\d+(?:/\d+)?)'),
+            (r'(M\.Tech|M\.E\.|Master\s+of\s+(?:Technology|Engineering|Science|Arts|Business))(?:[,\s]+in)?[,\s]+(\w+(?:\s+\w+){0,3})'),
 
             # MBA, BBA, etc.
-            (r'(MBA|BBA|MCA|BCA|B\.Sc|M\.Sc|B\.A|M\.A)(?:[,\s]+in)?[,\s]+(\w+(?:\s+\w+){0,3})?',
-             r'([A-Z][^\n]{10,100}?(?:University|College|Institute|School))',
-             r'(\d{4})',
-             r'CGPA[:\s]+(\d+\.\d+(?:/\d+)?)'),
+            (r'(MBA|BBA|MCA|BCA|B\.Sc|M\.Sc|B\.A|M\.A|PhD|Diploma)(?:[,\s]+in)?[,\s]+(\w+(?:\s+\w+){0,3})?'),
+             
+            # GENERIC PATTERN: Bachelor/Master of ...
+            (r'(Bachelor|Master|Diploma|Doctor)s?\s+of\s+([A-Za-z\s]+)'),
+            
+            # GENERIC: Just the degree name if it contains Degree/Diploma
+            (r'([A-Za-z\s]+(Degree|Diploma|Certificate))')
         ]
 
-        for degree_pattern, inst_pattern, year_pattern, cgpa_pattern in degree_patterns:
-            degree_matches = re.finditer(degree_pattern, text, re.IGNORECASE)
+        # Common patterns
+        inst_pattern = r'([A-Z][^\n]{4,100}?(?:University|College|Institute|Technology|School|Academy|Polytechnic))'
+        year_pattern = r'\b(20\d{2}|19\d{2})\b'
+        cgpa_pattern = r'(?:CGPA|GPA|Score)[:\s]+(\d+\.\d+(?:/\d+)?)'
+
+        for deg_regex in degree_patterns:
+            degree_matches = re.finditer(deg_regex, text, re.IGNORECASE)
 
             for deg_match in degree_matches:
                 degree = deg_match.group(1).strip()
-                major = deg_match.group(2).strip() if deg_match.lastindex >= 2 else ""
+                major = ""
+                if len(deg_match.groups()) >= 2 and deg_match.group(2):
+                    major = deg_match.group(2).strip()
 
                 # Clean major - remove trailing junk
                 if major:
@@ -251,12 +253,21 @@ class ResumeParser:
                 # Find institution near this degree
                 search_start = deg_match.end()
                 search_text = text[search_start:search_start+300]
+                
+                # Check backward too
+                search_before = text[max(0, deg_match.start()-150):deg_match.start()]
 
                 institution = ""
                 inst_match = re.search(inst_pattern, search_text)
                 if inst_match:
                     institution = inst_match.group(1).strip()
-                    # Clean institution name
+                else:
+                    # Try backward
+                    inst_match_prev = re.search(inst_pattern, search_before)
+                    if inst_match_prev:
+                        institution = inst_match_prev.group(1).strip()
+                
+                if institution:
                     institution = re.sub(r'\s*[–-].*$', '', institution).strip()
 
                 # Find year
@@ -264,6 +275,11 @@ class ResumeParser:
                 year_match = re.search(year_pattern, search_text)
                 if year_match:
                     year = year_match.group(1)
+                elif not year:
+                     # Check backward for year
+                    year_match_prev = re.search(year_pattern, search_before)
+                    if year_match_prev:
+                        year = year_match_prev.group(1)
 
                 # Find CGPA
                 cgpa = ""
@@ -448,7 +464,7 @@ class ResumeParser:
         capture = False
         
         # Keywords that start the summary section
-        summary_headers = ['summary', 'profile', 'professional summary', 'objective', 'about me', 'executive summary']
+        summary_headers = ['summary', 'profile', 'professional summary', 'objective', 'about me', 'executive summary', 'biography']
         
         # Scan for header
         for i, line in enumerate(lines[:30]):  # Check first 30 lines
@@ -462,7 +478,7 @@ class ResumeParser:
             # Stop capturing if we hit another section
             if capture:
                 # Key sections that end the summary
-                if any(k in line_lower for k in ['experience', 'education', 'skills', 'projects', 'certifications', 'languages']):
+                if any(k in line_lower for k in ['experience', 'education', 'skills', 'projects', 'certifications', 'languages', 'contact', 'work history']):
                     break
                 
                 # If line is not empty, add it
@@ -473,10 +489,25 @@ class ResumeParser:
                 if len(summary_lines) > 8:
                     break
         
-        # If no explicit header found, try to guess (first block of text after header)
+        # If no explicit header found, try heuristic: First substantial paragraph after name/contact
         if not summary_lines:
-            # Skip potential name/contact info (heuristic: skip first 5-10 non-empty lines if short)
-             pass 
+            # Skip first few lines that are likely name/email/phone/location
+            non_empty_lines = [l.strip() for l in lines if l.strip()]
+            start_idx = 0
+            
+            # Skip likely header info (short lines, emails, phones)
+            for i, line in enumerate(non_empty_lines[:10]):
+                if '@' in line or len(line) < 40 or any(c.isdigit() for c in line) or 'linkedin' in line.lower():
+                    continue
+                start_idx = i
+                break
+            
+            # Capture next 3-4 lines as potential summary
+            if start_idx < len(non_empty_lines):
+                potential_summary = non_empty_lines[start_idx:start_idx+4]
+                # Validate it looks like a sentence
+                if len(' '.join(potential_summary)) > 50:
+                    summary_lines = potential_summary
 
         return ' '.join(summary_lines)
 
