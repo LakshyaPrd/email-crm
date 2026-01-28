@@ -18,7 +18,7 @@ class WebOAuthHandler:
     def __init__(self):
         self.scopes = settings.GMAIL_SCOPES
         # FORCE VPS IP via nip.io (Domain that maps to IP) - Google requires a domain!
-        self.redirect_uri = 'http://76.13.17.251.nip.io:8010/api/auth/google/callback'
+        self.redirect_uri = 'http://crm.76.13.17.251.nip.io:8010/api/auth/google/callback'
         
     def generate_auth_url(self, state: Optional[str] = None) -> Dict[str, str]:
         """
