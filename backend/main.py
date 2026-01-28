@@ -47,7 +47,8 @@ current_recruiter_id: Optional[str] = None
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://76.13.17.251:3005",
+    "http://crm.76.13.17.251.nip.io:3005"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -22,6 +22,7 @@ services:
       UPLOAD_DIR: /app/uploads
       GMAIL_CREDENTIALS_FILE: /app/credentials.json
       GMAIL_TOKEN_FILE: /app/token.json
+      PUBLIC_BACKEND_URL: http://crm.76.13.17.251.nip.io:8010
     volumes:
       - ./uploads:/app/uploads
       - ./credentials.json:/app/credentials.json
@@ -31,7 +32,7 @@ services:
     networks:
       - crm-network
     ports:
-      - "8000:8000"
+      - "8010:8000"
     command: uvicorn main:app --host 0.0.0.0 --port 8000
 
   frontend:
@@ -41,13 +42,13 @@ services:
     container_name: crm-frontend
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_URL: http://76.13.17.251:8000/api
+      NEXT_PUBLIC_API_URL: http://crm.76.13.17.251.nip.io:8010/api
     depends_on:
       - backend
     networks:
       - crm-network
     ports:
-      - "3000:3000"
+      - "3005:3000"
 
 networks:
   crm-network:
