@@ -281,7 +281,6 @@ async def trigger_scan(
         hours_back, 
         current_batch_id, 
         recruiter_id,
-        recruiter_id,  # recruiter_id
         str(current_user.id),  # user_id
     )
     
