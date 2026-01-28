@@ -69,7 +69,7 @@ class GmailService:
                     settings.GMAIL_SCOPES
                 )
                 # Force account selector and offline access
-                flow.redirect_uri = 'http://crm.76.13.17.251.nip.io:8010/api/auth/google/callback'
+                flow.redirect_uri = settings.GOOGLE_REDIRECT_URI
                 
                 # CRITICAL: These parameters force account selection
                 try:

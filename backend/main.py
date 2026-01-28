@@ -712,6 +712,10 @@ async def google_oauth_login():
         oauth_handler = WebOAuthHandler()
         auth_data = oauth_handler.generate_auth_url()
         
+        print(f"🔑 Generating OAuth URL...")
+        print(f"   - Redirect URI: {oauth_handler.redirect_uri}")
+        print(f"   - Auth URL: {auth_data['auth_url'][:100]}...")
+        
         # Store state for verification (in production, use Redis with expiry)
         oauth_states[auth_data['state']] = {
             'created_at': datetime.utcnow().isoformat(),

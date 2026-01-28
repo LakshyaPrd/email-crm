@@ -13,6 +13,13 @@ class Settings(BaseSettings):
     # Files
     UPLOAD_DIR: str = "uploads"
 
+    # Public URL for Redirects
+    PUBLIC_BACKEND_URL: str = "http://crm.76.13.17.251.nip.io:8010"
+    
+    @property
+    def GOOGLE_REDIRECT_URI(self) -> str:
+        return f"{self.PUBLIC_BACKEND_URL}/api/auth/google/callback"
+
     # Gmail OAuth (legacy local token login)
     GMAIL_TOKEN_FILE: str = "token.json"
     GMAIL_CREDENTIALS_FILE: str = "credentials.json"
