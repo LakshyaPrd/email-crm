@@ -25,7 +25,7 @@ services:
       PUBLIC_BACKEND_URL: http://crm.76.13.17.251.nip.io:8010
     volumes:
       - ./uploads:/app/uploads
-      - ./credentials.json:/app/credentials.json
+      - ./backend/credentials.json:/app/credentials.json
       - ./token.json:/app/token.json
     depends_on:
       - mongo
