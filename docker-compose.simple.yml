@@ -23,6 +23,7 @@ services:
       GMAIL_CREDENTIALS_FILE: /app/credentials.json
       GMAIL_TOKEN_FILE: /app/token.json
       PUBLIC_BACKEND_URL: http://crm.76.13.17.251.nip.io:8010
+      JWT_SECRET: ${JWT_SECRET}
     volumes:
       - ./uploads:/app/uploads
       - ./backend/credentials.json:/app/credentials.json
